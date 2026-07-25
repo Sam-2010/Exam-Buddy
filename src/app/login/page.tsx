@@ -55,7 +55,7 @@ export default function LoginPage() {
 
         if (error) {
           console.error('Supabase query error:', error);
-          throw new Error('Database connection failed. Please try again.');
+          throw new Error(`Database query failed: ${error.message} (${error.code || ''})`);
         }
 
         if (!data || data.password !== hashedInputPassword) {

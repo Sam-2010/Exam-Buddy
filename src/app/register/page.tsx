@@ -67,7 +67,7 @@ export default function RegisterPage() {
 
         if (checkError) {
           console.error('Supabase uniqueness check error:', checkError);
-          throw new Error('Database connection failed. Please try again.');
+          throw new Error(`Database check failed: ${checkError.message} (${checkError.code || ''})`);
         }
 
         if (existingUser) {
@@ -90,7 +90,7 @@ export default function RegisterPage() {
 
         if (insertError) {
           console.error('Supabase insert profile error:', insertError);
-          throw new Error('Failed to create account. Please try again.');
+          throw new Error(`Database insert failed: ${insertError.message} (${insertError.code || ''})`);
         }
 
         // 3. Save profile session locally and redirect
