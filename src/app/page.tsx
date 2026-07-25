@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
   Brain, Mic, MicOff, Send, Sparkles, Trophy, TrendingUp, 
@@ -74,9 +75,8 @@ export default function Home() {
   const [topicScores, setTopicScores] = useState<TopicScore[]>([]);
   const [globalStats, setGlobalStats] = useState({ totalQuestions: 0, avgScore: 0 });
 
-  // Auth setup state
-  const [authName, setAuthName] = useState('');
-  const [authRole, setAuthRole] = useState('Software Engineer');
+  const router = useRouter();
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   // Session Config State
   const [selectedDomain, setSelectedDomain] = useState(DOMAINS_SCHEMA[0].name);
@@ -110,9 +110,13 @@ export default function Home() {
   // Initialize simulated auth profile and browser check
   useEffect(() => {
     const savedProfile = localStorage.getItem('exam_buddy_profile');
-    if (savedProfile) {
-      setProfile(JSON.parse(savedProfile)); // eslint-disable-line react-hooks/set-state-in-effect
+    if (!savedProfile) {
+      router.push('/login');
+      return;
     }
+
+    setProfile(JSON.parse(savedProfile));
+    setIsCheckingAuth(false);
 
     // Speech recognition setup
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -147,7 +151,7 @@ export default function Home() {
 
       setRecognition(rec);
     }
-  }, []);
+  }, [router]);
 
   // Sync topics list when domain changes
   useEffect(() => {
@@ -219,38 +223,13 @@ export default function Home() {
     }
   }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auth Submit Action
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!authName.trim()) return;
-
-    const mockId = crypto.randomUUID();
-    const newProfile = { id: mockId, full_name: authName, target_role: authRole };
-
-    if (dbConfigured) {
-      try {
-        const { error } = await supabase.from('profiles').upsert({
-          id: mockId,
-          full_name: authName,
-          target_role: authRole,
-          updated_at: new Date().toISOString()
-        });
-        if (error) throw error;
-      } catch (err) {
-        console.error('Error writing profile to Supabase:', err);
-      }
-    }
-
-    localStorage.setItem('exam_buddy_profile', JSON.stringify(newProfile));
-    setProfile(newProfile);
-  };
-
   const handleLogout = () => {
     localStorage.removeItem('exam_buddy_profile');
     setProfile(null);
     setActiveTab('dashboard');
     setTopicScores([]);
     setGlobalStats({ totalQuestions: 0, avgScore: 0 });
+    router.push('/login');
   };
 
   // Toggle voice recording
@@ -549,6 +528,31 @@ export default function Home() {
     return 'var(--danger)';
   };
 
+  if (isCheckingAuth) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh',
+        background: '#07080e',
+        color: '#f3f4f6'
+      }}>
+        <div style={{
+          width: '40px',
+          height: '40px',
+          border: '3px solid rgba(99, 102, 241, 0.2)',
+          borderTopColor: 'var(--primary)',
+          borderRadius: '50%',
+          animation: 'rotate 0.8s linear infinite',
+          marginBottom: '1rem'
+        }} />
+        <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Loading Exam Buddy...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="container" style={{ animation: 'fadeIn var(--transition-slow)' }}>
       {/* Missing configuration banner warning */}
@@ -617,62 +621,8 @@ export default function Home() {
         )}
       </header>
 
-      {/* Auth Gate Screen */}
-      {!profile ? (
-        <div style={{ display: 'flex', justifyContent: 'center', margin: '4rem 0' }}>
-          <div className="card" style={{ maxWidth: '450px', width: '100%', padding: '2.5rem 2rem', textAlign: 'center' }}>
-            <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'center' }}>
-              <div style={{
-                width: '64px',
-                height: '64px',
-                background: 'rgba(99, 102, 241, 0.1)',
-                border: '1px solid rgba(99, 102, 241, 0.2)',
-                borderRadius: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Sparkles size={32} color="var(--primary)" />
-              </div>
-            </div>
-            <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem', fontWeight: 700 }}>Welcome to Exam Buddy</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '2rem' }}>
-              Create your coaching profile in one step to begin generating personalized study materials and tracking your adaptive skill ratings.
-            </p>
-
-            <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', textAlign: 'left' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Your Name</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. John Doe"
-                  value={authName}
-                  onChange={e => setAuthName(e.target.value)}
-                  required 
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Target Role / Path</label>
-                <select value={authRole} onChange={e => setAuthRole(e.target.value)}>
-                  <option value="Software Engineer">Software Engineer (General)</option>
-                  <option value="Backend Engineer">Backend Developer (Spring Boot, Node)</option>
-                  <option value="Frontend Engineer">Frontend Developer (React, Next.js)</option>
-                  <option value="AI/ML Engineer">AI / Machine Learning Engineer</option>
-                  <option value="GATE CS Candidate">GATE Computer Science Candidate</option>
-                  <option value="Data Analyst">Data Analyst</option>
-                  <option value="System Architect">System Architect / Tech Lead</option>
-                </select>
-              </div>
-
-              <button type="submit" style={{ marginTop: '0.5rem', padding: '0.85rem' }}>
-                Create Profile & Start <ChevronRight size={16} />
-              </button>
-            </form>
-          </div>
-        </div>
-      ) : (
-        /* Main Application Workspace */
+      {/* Main Application Workspace */}
+      {profile && (
         <div>
           {/* Navigation Tabs */}
           {activeTab !== 'session' && (

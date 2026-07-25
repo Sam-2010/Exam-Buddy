@@ -21,8 +21,8 @@
   --text-muted: #9ca3af;
   --text-bright: #ffffff;
   
-  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-geist-mono), monospace;
+  --font-sans: system-ui, -apple-system, sans-serif;
+  --font-mono: monospace;
   
   --transition-fast: 0.15s ease;
   --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);

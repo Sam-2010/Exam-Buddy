@@ -4,9 +4,15 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     full_name TEXT,
     avatar_url TEXT,
     target_role TEXT DEFAULT 'Software Engineer',
+    username TEXT UNIQUE,
+    password TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration helpers if database already exists:
+-- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS username TEXT UNIQUE;
+-- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS password TEXT;
 
 -- 2. Create user_topic_scores table
 CREATE TABLE IF NOT EXISTS public.user_topic_scores (

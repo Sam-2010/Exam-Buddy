@@ -15,6 +15,8 @@ export type DatabaseProfile = {
   full_name: string | null;
   avatar_url: string | null;
   target_role: string;
+  username?: string | null;
+  password?: string | null;
   created_at?: string;
   updated_at?: string;
 };
