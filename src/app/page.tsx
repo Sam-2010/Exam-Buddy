@@ -2304,144 +2304,6 @@ export default function Home() {
 
                   </div>
                 </div>
-
-                {/* Candidate Resume & Portfolio Card */}
-                <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <div>
-                    <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <FileText size={18} color="var(--primary)" /> Candidate Resume & Portfolio
-                      </span>
-                      {resumeData ? (
-                        <span className="badge badge-success" style={{ fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                          <Check size={12} /> Active Resume
-                        </span>
-                      ) : (
-                        <span className="badge" style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.06)' }}>
-                          Optional
-                        </span>
-                      )}
-                    </h3>
-
-                    {resumeData ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                        <div style={{ background: 'rgba(139, 92, 246, 0.05)', border: '1px solid rgba(139, 92, 246, 0.2)', padding: '0.85rem', borderRadius: '10px' }}>
-                          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-bright)' }}>
-                            {resumeData.candidateName || 'Candidate Profile'}
-                          </div>
-                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem', lineHeight: '1.4' }}>
-                            {resumeData.summary || 'Resume projects loaded.'}
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.8rem' }}>
-                          <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
-                            <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Projects Parsed</span>
-                            <div style={{ fontWeight: 700, color: 'var(--secondary)' }}>{resumeData.projects?.length || 0} Projects</div>
-                          </div>
-                          <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
-                            <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Key Skills</span>
-                            <div style={{ fontWeight: 700, color: 'var(--primary)' }}>{resumeData.skills?.length || 0} Extracted</div>
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.35rem' }}>
-                          <button className="button-secondary" style={{ flex: 1, padding: '0.5rem', fontSize: '0.78rem' }} onClick={() => setShowResumeModal(true)}>
-                            <Eye size={14} /> Preview Portfolio
-                          </button>
-                          <button className="button-secondary" style={{ padding: '0.5rem', fontSize: '0.78rem', color: '#fda4af' }} onClick={handleClearResume} title="Clear Resume">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                          Upload your resume or portfolio to enable hyper-realistic questions based on your actual projects, architecture choices, and tools.
-                        </p>
-
-                        {/* Format Pills */}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                          {['PDF', 'Word (.docx)', 'PPTX', 'Markdown', 'TXT'].map(fmt => (
-                            <span key={fmt} style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '4px', padding: '0.15rem 0.45rem', fontSize: '0.68rem', color: '#a5b4fc' }}>
-                              {fmt}
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* Mode selector tab */}
-                        <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(255,255,255,0.03)', padding: '0.2rem', borderRadius: '8px' }}>
-                          <button 
-                            className={resumeInputMode === 'upload' ? '' : 'button-secondary'} 
-                            style={{ flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.75rem' }}
-                            onClick={() => setResumeInputMode('upload')}
-                          >
-                            <UploadCloud size={14} /> Upload File
-                          </button>
-                          <button 
-                            className={resumeInputMode === 'paste' ? '' : 'button-secondary'} 
-                            style={{ flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.75rem' }}
-                            onClick={() => setResumeInputMode('paste')}
-                          >
-                            <FileCode size={14} /> Paste Text
-                          </button>
-                        </div>
-
-                        {resumeInputMode === 'upload' ? (
-                          <div style={{ position: 'relative', border: '2px dashed rgba(139, 92, 246, 0.3)', borderRadius: '10px', padding: '1.25rem 1rem', textAlign: 'center', background: 'rgba(139, 92, 246, 0.02)' }}>
-                            <input 
-                              type="file" 
-                              accept=".pdf,.docx,.doc,.pptx,.ppt,.md,.txt" 
-                              onChange={handleFileUpload}
-                              disabled={isParsingResume}
-                              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
-                            />
-                            {isParsingResume ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                                <RefreshCw size={24} color="var(--primary)" style={{ animation: 'rotate 1s linear infinite' }} />
-                                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)' }}>Gemini is analyzing resume...</span>
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem' }}>
-                                <UploadCloud size={24} color="var(--secondary)" />
-                                <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Drop PDF, Word, PPTX, MD or TXT file</span>
-                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Click or drag file here</span>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                            <textarea 
-                              placeholder="Paste raw text of your resume or portfolio here..." 
-                              rows={4}
-                              value={pastedResumeText}
-                              onChange={e => setPastedResumeText(e.target.value)}
-                              disabled={isParsingResume}
-                              style={{ width: '100%', fontSize: '0.8rem', resize: 'vertical' }}
-                            />
-                            <button 
-                              style={{ padding: '0.5rem', fontSize: '0.8rem' }}
-                              onClick={handlePasteResumeSubmit}
-                              disabled={isParsingResume}
-                            >
-                              {isParsingResume ? <RefreshCw size={14} style={{ animation: 'rotate 1s linear infinite' }} /> : <Check size={14} />} Parse Resume Text
-                            </button>
-                          </div>
-                        )}
-
-                        {resumeError && (
-                          <div style={{ fontSize: '0.75rem', color: '#fda4af', background: 'rgba(244, 63, 94, 0.1)', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(244, 63, 94, 0.2)' }}>
-                            {resumeError}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.75rem', marginTop: '1rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    💡 AI Interviewer will reference your uploaded projects automatically when generating questions.
-                  </div>
-                </div>
               </div>
 
               {/* Saved Topics & Difficulty Levels grid */}
@@ -2494,6 +2356,155 @@ export default function Home() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Candidate Resume & Portfolio Section (Placed at the end of the Dashboard) */}
+              <div className="card" style={{ marginTop: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.15rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <FileText size={20} color="var(--primary)" /> Candidate Resume & Portfolio Context
+                    </h3>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                      Upload your resume or portfolio to ground AI Mock Interviews in your actual projects, architectural choices, and tech stack.
+                    </p>
+                  </div>
+                  {resumeData ? (
+                    <span className="badge badge-success" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.35rem 0.75rem' }}>
+                      <Check size={14} /> Active Resume Loaded
+                    </span>
+                  ) : (
+                    <span className="badge" style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.06)', padding: '0.35rem 0.75rem' }}>
+                      Optional Feature
+                    </span>
+                  )}
+                </div>
+
+                {resumeData ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(139, 92, 246, 0.04)', border: '1px solid rgba(139, 92, 246, 0.15)', padding: '1.25rem', borderRadius: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+                      <div>
+                        <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-bright)' }}>
+                          {resumeData.candidateName || 'Candidate Profile'}
+                        </h4>
+                        <p style={{ fontSize: '0.83rem', color: 'var(--text-muted)', marginTop: '0.3rem', maxWidth: '700px', lineHeight: '1.5' }}>
+                          {resumeData.summary || 'Resume projects extracted and ready for AI interview sessions.'}
+                        </p>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.75rem' }}>
+                        <button className="button" style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }} onClick={() => setShowResumeModal(true)}>
+                          <Eye size={15} /> Preview Extracted Portfolio ({resumeData.projects?.length || 0} Projects)
+                        </button>
+                        <button className="button-secondary" style={{ padding: '0.5rem 0.85rem', fontSize: '0.8rem', color: '#fda4af' }} onClick={handleClearResume} title="Clear Resume">
+                          <Trash2 size={15} /> Clear Resume
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'uppercase' }}>Projects Detected</span>
+                        <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--secondary)', marginTop: '0.15rem' }}>
+                          {resumeData.projects?.length || 0} Portfolio Projects
+                        </div>
+                      </div>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'uppercase' }}>Key Technologies</span>
+                        <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--primary)', marginTop: '0.15rem' }}>
+                          {resumeData.skills?.length || 0} Extracted Skills
+                        </div>
+                      </div>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'uppercase' }}>Interview Mode</span>
+                        <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--success)', marginTop: '0.15rem' }}>
+                          Project Grounding Active
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Supported Formats:</span>
+                        {['PDF (.pdf)', 'Word (.docx, .doc)', 'PowerPoint (.pptx, .ppt)', 'Markdown (.md)', 'Plain Text (.txt)'].map(fmt => (
+                          <span key={fmt} style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '6px', padding: '0.2rem 0.55rem', fontSize: '0.72rem', color: '#a5b4fc' }}>
+                            {fmt}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Mode selector tab */}
+                      <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(255,255,255,0.03)', padding: '0.25rem', borderRadius: '8px' }}>
+                        <button 
+                          className={resumeInputMode === 'upload' ? '' : 'button-secondary'} 
+                          style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem' }}
+                          onClick={() => setResumeInputMode('upload')}
+                        >
+                          <UploadCloud size={15} /> Upload File
+                        </button>
+                        <button 
+                          className={resumeInputMode === 'paste' ? '' : 'button-secondary'} 
+                          style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem' }}
+                          onClick={() => setResumeInputMode('paste')}
+                        >
+                          <FileCode size={15} /> Paste Resume Text
+                        </button>
+                      </div>
+                    </div>
+
+                    {resumeInputMode === 'upload' ? (
+                      <div style={{ position: 'relative', border: '2px dashed rgba(139, 92, 246, 0.3)', borderRadius: '12px', padding: '2rem 1.5rem', textAlign: 'center', background: 'rgba(139, 92, 246, 0.02)', transition: 'border-color 0.2s' }}>
+                        <input 
+                          type="file" 
+                          accept=".pdf,.docx,.doc,.pptx,.ppt,.md,.txt" 
+                          onChange={handleFileUpload}
+                          disabled={isParsingResume}
+                          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                        />
+                        {isParsingResume ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+                            <RefreshCw size={28} color="var(--primary)" style={{ animation: 'rotate 1s linear infinite' }} />
+                            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--primary)' }}>Gemini is analyzing document & extracting project architecture...</span>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                            <UploadCloud size={32} color="var(--secondary)" />
+                            <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-bright)' }}>Drag & Drop your Resume or Portfolio here</span>
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Supports PDF, Word (.docx), PowerPoint (.pptx), Markdown (.md), or Plain Text (.txt) &bull; Click to browse files</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <textarea 
+                          placeholder="Paste raw text of your resume, LinkedIn profile summary, or project descriptions here..." 
+                          rows={6}
+                          value={pastedResumeText}
+                          onChange={e => setPastedResumeText(e.target.value)}
+                          disabled={isParsingResume}
+                          style={{ width: '100%', fontSize: '0.85rem', resize: 'vertical', padding: '0.85rem' }}
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                          <button 
+                            style={{ padding: '0.6rem 1.25rem', fontSize: '0.85rem' }}
+                            onClick={handlePasteResumeSubmit}
+                            disabled={isParsingResume}
+                          >
+                            {isParsingResume ? <RefreshCw size={15} style={{ animation: 'rotate 1s linear infinite' }} /> : <Check size={15} />} Parse Resume Text
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {resumeError && (
+                      <div style={{ fontSize: '0.8rem', color: '#fda4af', background: 'rgba(244, 63, 94, 0.1)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid rgba(244, 63, 94, 0.2)' }}>
+                        {resumeError}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
