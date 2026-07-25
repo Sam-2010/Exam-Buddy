@@ -30,9 +30,35 @@ const responseSchema = {
     detailedFeedback: { 
       type: Type.STRING, 
       description: "Comprehensive, constructive feedback explaining why the score was given and how to write a better answer next time." 
+    },
+    extractedEntities: {
+      type: Type.OBJECT,
+      properties: {
+        technologies: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: "Key programming languages, databases, message queues, caches, or tools explicitly mentioned (e.g. ['TypeScript', 'Redis', 'PostgreSQL'])."
+        },
+        frameworks: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: "Key frameworks, libraries, or runtimes explicitly mentioned (e.g. ['Next.js', 'Spring Boot', 'TensorFlow'])."
+        },
+        architecturalChoices: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: "Key architectural designs or patterns explicitly mentioned (e.g. ['Microservices', 'Event Sourcing', 'CQRS', 'MVC'])."
+        },
+        projectDetails: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: "Key details or descriptions of personal projects, crawlers, or apps mentioned by the candidate."
+        }
+      },
+      description: "Technologies, frameworks, architectures, or project details extracted from the candidate's response."
     }
   },
-  required: ["score", "expectedConcepts", "strengths", "gaps", "detailedFeedback"]
+  required: ["score", "expectedConcepts", "strengths", "gaps", "detailedFeedback", "extractedEntities"]
 };
 
 export async function POST(req: NextRequest) {
@@ -46,7 +72,8 @@ export async function POST(req: NextRequest) {
       userAnswerText, 
       isVoiceInput, 
       difficultyLevel,
-      mode 
+      mode,
+      proctoringFlags 
     } = await req.json();
 
     if (!domain || !topic || !questionText || !userAnswerText || difficultyLevel === undefined) {
@@ -73,7 +100,7 @@ Evaluate the user's answer to the following question.
 Track/Domain: ${domain}
 Topic/Role: ${topic}
 Difficulty Level: ${difficultyLevel}/10
-Interview Mode: ${mode === 'STUDY' ? 'Study Mode (Concept Deep-Dive, be constructive, check for core conceptual understanding)' : 'Mock Interview Mode (Strict mock interview, rate based on professional clarity, precise technical details, and accuracy)'}
+Interview Mode: ${mode === 'STUDY' ? 'Study Mode (Concept Deep-Dive, be constructive, check for core conceptual understanding)' : mode === 'AI_INTERVIEW' ? 'AI Interview Mode (Strict technical evaluation, perform entity extraction, grade communication clarity and correctness)' : 'Mock Interview Mode (Strict mock interview, rate based on professional clarity, precise technical details, and accuracy)'}
 
 [Question]
 ${questionText}
@@ -83,9 +110,9 @@ ${userAnswerText}
 
 Instructions:
 1. Grade the answer objectively out of 100.
-2. In Mock Interview Mode, be strict about correctness and complete explanations. If the answer is vague or extremely short, give a lower score (e.g. < 50).
-3. In Study Mode, give credit for basic understanding, but point out missing details.
-4. Extract the key concepts expected for this question at this difficulty level.
+2. In Mock/AI Interview Mode, be strict about correctness and complete explanations. If the answer is vague, extremely short, or marked wrong due to proctoring, give a score of 0 or very low (e.g. < 30).
+3. Extract the key concepts expected for this question at this difficulty level.
+4. Extract key technologies, frameworks, architectures, and personal projects mentioned in the candidate's response.
 5. Identify specific strengths and gaps.
 6. Provide structured feedback.
 7. Return your response in JSON matching the requested schema.`;
@@ -136,7 +163,9 @@ Instructions:
             score: score,
             strengths: evaluationResult.strengths,
             gaps: evaluationResult.gaps,
-            difficulty_level: difficultyLevel
+            difficulty_level: difficultyLevel,
+            extracted_entities: evaluationResult.extractedEntities || {},
+            proctoring_flags: proctoringFlags || []
           });
           if (evalErr) throw evalErr;
         }

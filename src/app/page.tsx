@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
   Brain, Mic, MicOff, Send, Sparkles, Trophy, TrendingUp, 
   Play, BookOpen, Award, ArrowRight, Compass, Activity, 
-  ChevronRight, LogOut, CheckCircle, AlertTriangle
+  ChevronRight, LogOut, CheckCircle, AlertTriangle,
+  ShieldAlert, Lock, Trash2, RefreshCw,
+  XCircle, UserCheck
 } from 'lucide-react';
 
 // Domain & Track Schema
@@ -84,7 +86,7 @@ export default function Home() {
   const [selectedRole, setSelectedRole] = useState(DOMAINS_SCHEMA[0].roles[0]);
   const [customTopic, setCustomTopic] = useState('');
   const [isCustomTopic, setIsCustomTopic] = useState(false);
-  const [sessionMode, setSessionMode] = useState<'STUDY' | 'MOCK_INTERVIEW'>('STUDY');
+  const [sessionMode, setSessionMode] = useState<'STUDY' | 'MOCK_INTERVIEW' | 'AI_INTERVIEW'>('STUDY');
   
   // Active Session State
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -98,6 +100,27 @@ export default function Home() {
   const [levelChangeBadge, setLevelChangeBadge] = useState<{ text: string; type: 'up' | 'down' | 'none' } | null>(null);
   const [sessionQuestionsCount, setSessionQuestionsCount] = useState(0);
   const [sessionScoresSum, setSessionScoresSum] = useState(0);
+
+  // AI Interview Mode state hooks
+  const [showInterviewWizard, setShowInterviewWizard] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [companyType, setCompanyType] = useState('MAANG');
+  const [yearsOfExperience, setYearsOfExperience] = useState(2);
+  const [targetRole, setTargetRole] = useState('Software Engineer');
+  const [proctoringWarnings, setProctoringWarnings] = useState(0);
+  const [proctoringLog, setProctoringLog] = useState<{ timestamp: string; type: string; details?: string }[]>([]);
+  const [extractedEntitiesAccumulated, setExtractedEntitiesAccumulated] = useState<{
+    technologies: string[];
+    frameworks: string[];
+    architecturalChoices: string[];
+    projectDetails: string[];
+  }>({ technologies: [], frameworks: [], architecturalChoices: [], projectDetails: [] });
+  const [proctoringWarningActive, setProctoringWarningActive] = useState<string | null>(null);
+  
+  const [isInterviewFinished, setIsInterviewFinished] = useState(false);
+  const [interviewSummaryResult, setInterviewSummaryResult] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [evaluationsList, setEvaluationsList] = useState<any[]>([]); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [isFinishingSession, setIsFinishingSession] = useState(false);
   
   // Suggested Resources state
   const [suggestedResources, setSuggestedResources] = useState<StudyResource[]>([]);
@@ -115,6 +138,7 @@ export default function Home() {
       return;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProfile(JSON.parse(savedProfile));
     setIsCheckingAuth(false);
 
@@ -484,13 +508,31 @@ export default function Home() {
   };
 
   // Next Question Button Handler
-  const handleNextQuestion = () => {
+  const handleNextQuestion = async () => {
     setUserAnswer('');
     setInterimTranscript('');
     setEvaluationResult(null);
     setLevelChangeBadge(null);
-    // Move to the next cached question instantly
-    setActiveQuestionIndex(prev => prev + 1);
+    
+    const topicName = isCustomTopic ? customTopic.trim() : selectedTopic;
+    const nextIdx = activeQuestionIndex + 1;
+    
+    if (nextIdx < questionQueue.length) {
+      setActiveQuestionIndex(nextIdx);
+    } else {
+      setIsPrefetching(true);
+      try {
+        const nextQList = await fetchQuestions(topicName, currentLevel, 1);
+        setQuestionQueue(prev => [...prev, ...nextQList]);
+        setActiveQuestionIndex(nextIdx);
+      } catch (e) {
+        console.error("Error fetching next question", e);
+        setQuestionQueue(prev => [...prev, `Explain key concepts related to ${topicName} (Level ${currentLevel}).`]);
+        setActiveQuestionIndex(nextIdx);
+      } finally {
+        setIsPrefetching(false);
+      }
+    }
   };
 
   // Finish Practice Session
@@ -528,6 +570,965 @@ export default function Home() {
     return 'var(--danger)';
   };
 
+  const triggerProctoringWarning = useCallback((type: string, details: string) => {
+    if (proctoringWarningActive || isEvaluating || isPrefetching || isFinishingSession || isInterviewFinished) return;
+
+    const timestamp = new Date().toLocaleTimeString();
+    const newLog = { timestamp, type, details };
+    setProctoringLog(prev => [...prev, newLog]);
+
+    const newWarningsCount = proctoringWarnings + 1;
+    setProctoringWarnings(newWarningsCount);
+
+    if (newWarningsCount >= 3) {
+      setProctoringWarningActive('FORFEIT');
+    } else {
+      setProctoringWarningActive(type);
+    }
+  }, [proctoringWarningActive, proctoringWarnings, isEvaluating, isPrefetching, isFinishingSession, isInterviewFinished]);
+
+  // Sync profile target role when profile loads
+  useEffect(() => {
+    if (profile) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTargetRole(profile.target_role || 'Software Engineer');
+    }
+  }, [profile]);
+
+  // Tab-switch & focus monitoring proctoring listener
+  useEffect(() => {
+    if (activeTab === 'session' && sessionMode === 'AI_INTERVIEW' && !isInterviewFinished) {
+      const handleBlur = () => {
+        triggerProctoringWarning('TAB_SWITCH', 'User navigated away or clicked out of the interview.');
+      };
+      
+      const handleVisibilityChange = () => {
+        if (document.hidden) {
+          triggerProctoringWarning('TAB_SWITCH', 'User switched browser tabs.');
+        }
+      };
+
+      window.addEventListener('blur', handleBlur);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        window.removeEventListener('blur', handleBlur);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }
+  }, [activeTab, sessionMode, isInterviewFinished, triggerProctoringWarning]);
+
+  const handleStartInterviewSession = async () => {
+    if (!profile) return;
+    
+    // Reset state
+    setQuestionQueue([]);
+    setActiveQuestionIndex(0);
+    setUserAnswer('');
+    setEvaluationResult(null);
+    setLevelChangeBadge(null);
+    setProctoringWarnings(0);
+    setProctoringLog([]);
+    setExtractedEntitiesAccumulated({ technologies: [], frameworks: [], architecturalChoices: [], projectDetails: [] });
+    setEvaluationsList([]);
+    setIsInterviewFinished(false);
+    setInterviewSummaryResult(null);
+    setProctoringWarningActive(null);
+    setActiveTab('session');
+    setSessionMode('AI_INTERVIEW');
+
+    // Create session in Supabase/local
+    let sessId = null;
+    if (dbConfigured) {
+      try {
+        const { data: sessData, error: sessErr } = await supabase
+          .from('sessions')
+          .insert({
+            user_id: profile.id,
+            domain: selectedDomain,
+            topic_or_role: targetRole,
+            mode: 'AI_INTERVIEW',
+            status: 'IN_PROGRESS',
+            company_type: companyType,
+            years_of_experience: yearsOfExperience
+          })
+          .select()
+          .single();
+        
+        if (sessErr) throw sessErr;
+        sessId = sessData.id;
+        setCurrentSessionId(sessId);
+      } catch (err) {
+        console.error('Error creating database session:', err);
+      }
+    } else {
+      // Offline mode ID
+      sessId = 'local-' + Date.now();
+      setCurrentSessionId(sessId);
+    }
+
+    // Load first question
+    setIsPrefetching(true);
+    try {
+      const response = await fetch('/api/generate-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain: selectedDomain,
+          topic: targetRole,
+          mode: 'AI_INTERVIEW',
+          currentLevel: yearsOfExperience >= 9 ? 8 : yearsOfExperience >= 5 ? 6 : yearsOfExperience >= 2 ? 4 : 2, // starting level based on YoE
+          targetRole: targetRole,
+          companyType: companyType,
+          yearsOfExperience: yearsOfExperience,
+          count: 1
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.questions && data.questions.length > 0) {
+          setQuestionQueue(data.questions);
+          setIsPrefetching(false);
+          return;
+        }
+      }
+      throw new Error("Failed to load");
+    } catch (e) {
+      console.error(e);
+      setQuestionQueue([`Tell me about your technical background and experience working with ${selectedDomain} roles.`]);
+    }
+    setIsPrefetching(false);
+  };
+
+  const handleInterviewSubmitAnswer = async (forfeitedText?: string) => {
+    if (isEvaluating || isPrefetching || isFinishingSession) return;
+
+    const isForfeit = !!forfeitedText;
+    const answerText = isForfeit ? "Forfeited due to proctoring violation." : userAnswer.trim();
+    
+    if (!answerText && !isForfeit) {
+      alert("Please record an answer first.");
+      return;
+    }
+
+    // Immediately dismiss warning overlays and reset warnings counter to transition smoothly
+    setProctoringWarningActive(null);
+    setProctoringWarnings(0);
+
+    setIsEvaluating(true);
+    
+    // Stop recording if active
+    if (isRecording && recognition) {
+      recognition.stop();
+      setIsRecording(false);
+    }
+
+    const topicName = targetRole; // target role acts as the main topic context
+    const currentQ = questionQueue[activeQuestionIndex] || '';
+
+    let scoreValue = 0;
+    let evalObj: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+    try {
+      // 1. Evaluate answer (Gemini call)
+      // If forfeited, we bypass the AI API and record a 0 score immediately to save API cost
+      if (isForfeit) {
+        evalObj = {
+          score: 0,
+          expectedConcepts: [],
+          strengths: [],
+          gaps: ['Question was forfeited due to multiple proctoring warnings (focus loss / tab switching).'],
+          detailedFeedback: 'You lost focus of the interview window too many times. According to the strict rules, this question has been marked wrong with 0 points.',
+          extractedEntities: { technologies: [], frameworks: [], architecturalChoices: [], projectDetails: [] }
+        };
+      } else {
+        const response = await fetch('/api/evaluate-answer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: profile?.id,
+            sessionId: currentSessionId,
+            domain: selectedDomain,
+            topic: topicName,
+            questionText: currentQ,
+            userAnswerText: answerText,
+            isVoiceInput: true,
+            difficultyLevel: currentLevel,
+            mode: 'AI_INTERVIEW',
+            proctoringFlags: proctoringLog.filter(log => log.type !== 'CAMERA_DISABLED') // attach proctoring infractions
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          evalObj = data.evaluation;
+        } else {
+          throw new Error("Grading failed");
+        }
+      }
+
+      if (evalObj) {
+        scoreValue = evalObj.score;
+        
+        // Append evaluation to history
+        const updatedEvals = [...evaluationsList, {
+          question_text: currentQ,
+          user_answer_text: answerText,
+          score: scoreValue,
+          strengths: evalObj.strengths,
+          gaps: evalObj.gaps,
+          expected_concepts: evalObj.expectedConcepts,
+          detailedFeedback: evalObj.detailedFeedback,
+          extracted_entities: evalObj.extractedEntities,
+          difficulty_level: currentLevel
+        }];
+        setEvaluationsList(updatedEvals);
+
+        // Accumulate extracted entities
+        const newEntities = evalObj.extractedEntities || {};
+        setExtractedEntitiesAccumulated(prev => ({
+          technologies: Array.from(new Set([...prev.technologies, ...(newEntities.technologies || [])])),
+          frameworks: Array.from(new Set([...prev.frameworks, ...(newEntities.frameworks || [])])),
+          architecturalChoices: Array.from(new Set([...prev.architecturalChoices, ...(newEntities.architecturalChoices || [])])),
+          projectDetails: Array.from(new Set([...prev.projectDetails, ...(newEntities.projectDetails || [])])),
+        }));
+
+        // Determine next level adaptation
+        let nextLvl = currentLevel;
+        if (scoreValue > 80) {
+          nextLvl = Math.min(currentLevel + 1, 10);
+        } else if (scoreValue < 50) {
+          nextLvl = Math.max(currentLevel - 1, 1);
+        }
+        setCurrentLevel(nextLvl);
+
+        // Check if we finished the 7-question set
+        const nextIndex = activeQuestionIndex + 1;
+        if (nextIndex >= 7) {
+          // Finish Interview Session!
+          await handleFinishInterview(updatedEvals);
+        } else {
+          // Fetch next follow-up question dynamically
+          setIsPrefetching(true);
+          
+          // Construct entities context to feed the follow-up prompt
+          const combinedEntities = {
+            technologies: Array.from(new Set([...extractedEntitiesAccumulated.technologies, ...(newEntities.technologies || [])])),
+            frameworks: Array.from(new Set([...extractedEntitiesAccumulated.frameworks, ...(newEntities.frameworks || [])])),
+            architecturalChoices: Array.from(new Set([...extractedEntitiesAccumulated.architecturalChoices, ...(newEntities.architecturalChoices || [])])),
+            projectDetails: Array.from(new Set([...extractedEntitiesAccumulated.projectDetails, ...(newEntities.projectDetails || [])])),
+          };
+
+          try {
+            const nextQResp = await fetch('/api/generate-questions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                domain: selectedDomain,
+                topic: topicName,
+                mode: 'AI_INTERVIEW',
+                currentLevel: nextLvl,
+                targetRole: targetRole,
+                companyType: companyType,
+                yearsOfExperience: yearsOfExperience,
+                extractedEntities: combinedEntities,
+                count: 1
+              })
+            });
+
+            if (nextQResp.ok) {
+              const nextQData = await nextQResp.json();
+              if (nextQData.questions && nextQData.questions.length > 0) {
+                setQuestionQueue(prev => [...prev, nextQData.questions[0]]);
+                setActiveQuestionIndex(nextIndex);
+              } else {
+                throw new Error("Fallback needed");
+              }
+            } else {
+              throw new Error("Fallback needed");
+            }
+          } catch (e) {
+            console.error("Error fetching dynamic follow-up, using static question", e);
+            setQuestionQueue(prev => [...prev, `Explain some advanced architecture patterns and scaling bottlenecks when working with ${topicName}.`]);
+            setActiveQuestionIndex(nextIndex);
+          } finally {
+            setIsPrefetching(false);
+          }
+        }
+      } else {
+        alert("Evaluation parsing error. Please try submitting again.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to evaluate response. Please try again.");
+    } finally {
+      setIsEvaluating(false);
+      setUserAnswer('');
+      setInterimTranscript('');
+      setProctoringWarnings(0); // reset proctoring warning counter for the next question
+      setProctoringWarningActive(null); // dismiss forfeit/warning modal overlay
+    }
+  };
+
+  const handleFinishInterview = async (finalEvals: any[]) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    setIsFinishingSession(true);
+
+    try {
+      const response = await fetch('/api/finish-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: currentSessionId,
+          userId: profile?.id,
+          domain: selectedDomain,
+          topic: targetRole,
+          companyType: companyType,
+          yearsOfExperience: yearsOfExperience,
+          proctoringWarningsCount: proctoringLog.length,
+          proctoringLog: proctoringLog,
+          localEvaluations: finalEvals // pass evaluations directly for localStorage fallback
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setInterviewSummaryResult(data);
+        setIsInterviewFinished(true);
+
+        // Update local topic scores to maintain dashboard stats (just like standard mock interview)
+        if (!dbConfigured) {
+          updateLocalTopicScores(targetRole, data.averageScore, currentLevel);
+          // Also save completed session in localStorage
+          const localSessions = JSON.parse(localStorage.getItem(`exam_buddy_sessions_${profile?.id}`) || '[]');
+          localSessions.push({
+            id: currentSessionId,
+            domain: selectedDomain,
+            topic_or_role: targetRole,
+            mode: 'AI_INTERVIEW',
+            overall_session_score: data.averageScore,
+            company_type: companyType,
+            years_of_experience: yearsOfExperience,
+            hiring_verdict: data.hiringVerdict,
+            executive_summary: data.executiveSummary,
+            overall_strengths: data.overallStrengths,
+            overall_gaps: data.overallGaps,
+            proctoring_warnings_count: proctoringLog.length,
+            proctoring_log: proctoringLog,
+            evaluations: finalEvals,
+            completed_at: new Date().toISOString()
+          });
+          localStorage.setItem(`exam_buddy_sessions_${profile?.id}`, JSON.stringify(localSessions));
+        }
+      } else {
+        alert("Failed to summarize interview results.");
+      }
+    } catch (e) {
+      console.error("Error compiling session", e);
+      alert("Failed to compile final score card.");
+    } finally {
+      setIsFinishingSession(false);
+    }
+  };
+
+  const handleExitInterviewEarly = () => {
+    if (confirm("Are you sure you want to quit the interview early? Your progress will not be saved.")) {
+      setActiveTab('dashboard');
+      setIsInterviewFinished(false);
+      setInterviewSummaryResult(null);
+      setEvaluationsList([]);
+    }
+  };
+
+  const renderInterviewReport = () => {
+    if (!interviewSummaryResult) return null;
+    const { hiringVerdict, executiveSummary, overallStrengths, overallGaps, averageScore } = interviewSummaryResult;
+    
+    const getVerdictColor = (v: string) => {
+      if (v === 'Strong Hire') return '#10b981';
+      if (v === 'Hire') return '#6366f1';
+      if (v === 'Needs Improvement') return '#f59e0b';
+      return '#f43f5e';
+    };
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', animation: 'fadeIn 0.5s ease-out' }}>
+        {/* Title Block */}
+        <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem', borderLeft: `6px solid ${getVerdictColor(hiringVerdict)}` }}>
+          <div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>AI INTERVIEW COMPLETE</div>
+            <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: '0.25rem' }}>{targetRole} Technical Review</h2>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+              Target Company Tier: <strong>{companyType}</strong> &bull; Experience level: <strong>{yearsOfExperience} Years</strong>
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Overall Rating</div>
+              <div style={{ fontSize: '2.2rem', fontWeight: 900, color: getScoreColor(averageScore) }}>{averageScore}%</div>
+            </div>
+            <div style={{
+              background: getVerdictColor(hiringVerdict) + '15',
+              border: `1px solid ${getVerdictColor(hiringVerdict)}`,
+              padding: '0.75rem 1.5rem',
+              borderRadius: '12px',
+              color: getVerdictColor(hiringVerdict),
+              fontWeight: 800,
+              fontSize: '1.1rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              boxShadow: `0 0 20px ${getVerdictColor(hiringVerdict)}15`
+            }}>
+              {hiringVerdict}
+            </div>
+          </div>
+        </div>
+
+        {/* Executive summary & Proctor log */}
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }} className="grid-summary-row">
+          {/* Executive Summary */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.75rem' }}>
+              <UserCheck size={18} color="var(--primary)" /> Executive Summary & Verdict
+            </h3>
+            <p style={{ fontSize: '0.95rem', lineHeight: '1.6', color: 'var(--text-bright)', whiteSpace: 'pre-line' }}>
+              {executiveSummary}
+            </p>
+          </div>
+
+          {/* Proctoring Log Card */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.75rem' }}>
+              <ShieldAlert size={18} color="var(--danger)" /> Proctoring Violations Log
+            </h3>
+            
+            {proctoringLog.length === 0 ? (
+              <div style={{ textAlign: 'center', color: 'var(--success)', padding: '2rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                <CheckCircle size={32} />
+                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Clean Record!</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>No tab-switches or camera issues detected.</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto', maxHeight: '200px' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', background: 'rgba(244, 63, 94, 0.05)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(244, 63, 94, 0.1)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <AlertTriangle size={14} color="var(--danger)" />
+                  <span>Total warnings logged: <strong>{proctoringLog.length}</strong></span>
+                </div>
+                {proctoringLog.map((log, idx) => (
+                  <div key={idx} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', padding: '0.5rem 0.75rem', borderRadius: '8px', fontSize: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.15rem' }}>
+                      <strong style={{ color: 'var(--danger)' }}>{log.type}</strong>
+                      <span style={{ color: 'var(--text-muted)' }}>{log.timestamp}</span>
+                    </div>
+                    <div style={{ color: 'var(--text-muted)' }}>{log.details}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Strengths & Gaps Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }} className="grid-summary-row">
+          {/* Strengths */}
+          <div className="card" style={{ background: 'rgba(16, 185, 129, 0.03)', border: '1px solid rgba(16, 185, 129, 0.1)' }}>
+            <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#6ee7b7', textTransform: 'uppercase', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <CheckCircle size={16} /> Demonstrated Strengths
+            </h4>
+            <ul style={{ paddingLeft: '1.25rem', fontSize: '0.9rem', lineHeight: '1.6', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {overallStrengths.map((str: string, i: number) => (
+                <li key={i}>{str}</li>
+              ))}
+              {overallStrengths.length === 0 && <li style={{ color: 'var(--text-muted)', listStyleType: 'none' }}>No specific strengths highlighted.</li>}
+            </ul>
+          </div>
+
+          {/* Gaps */}
+          <div className="card" style={{ background: 'rgba(244, 63, 94, 0.03)', border: '1px solid rgba(244, 63, 94, 0.1)' }}>
+            <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#fda4af', textTransform: 'uppercase', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <AlertTriangle size={16} /> Critical Gaps & Revision Areas
+            </h4>
+            <ul style={{ paddingLeft: '1.25rem', fontSize: '0.9rem', lineHeight: '1.6', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {overallGaps.map((gap: string, i: number) => (
+                <li key={i}>{gap}</li>
+              ))}
+              {overallGaps.length === 0 && <li style={{ color: 'var(--text-muted)', listStyleType: 'none' }}>No conceptual gaps flagged. Outstanding performance!</li>}
+            </ul>
+          </div>
+        </div>
+
+        {/* Timeline breakdown */}
+        <div className="card">
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.75rem' }}>
+            Question-by-Question Technical Evaluation
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {evaluationsList.map((ev, idx) => (
+              <div key={idx} style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '12px', padding: '1.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <span style={{ background: 'rgba(139,92,246,0.1)', color: 'var(--secondary)', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem' }} className="flex-center">
+                      {idx + 1}
+                    </span>
+                    <strong style={{ fontSize: '0.95rem' }}>Difficulty Level {ev.difficulty_level}/10</strong>
+                  </div>
+                  <div style={{ fontWeight: 700, color: getScoreColor(ev.score), fontSize: '1.1rem', background: getScoreColor(ev.score) + '15', padding: '0.25rem 0.75rem', borderRadius: '8px', border: `1px solid ${getScoreColor(ev.score)}30` }}>
+                    Score: {ev.score}/100
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                    <strong>Q:</strong> {ev.question_text}
+                  </div>
+                  <div style={{ fontSize: '0.9rem', background: 'rgba(0,0,0,0.2)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.02)', color: 'var(--text-bright)', fontStyle: 'italic' }}>
+                    <strong>Your Response (Voice Transcript):</strong> &ldquo;{ev.user_answer_text}&rdquo;
+                  </div>
+                  
+                  {/* Expandable detailed feedback details */}
+                  <details style={{ cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    <summary style={{ fontWeight: 600, color: 'var(--primary)', padding: '0.25rem 0' }}>Show detailed assessment feedback</summary>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.75rem', cursor: 'default' }}>
+                      <div style={{ background: 'rgba(16,185,129,0.02)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(16,185,129,0.05)' }}>
+                        <strong style={{ color: '#6ee7b7', display: 'block', marginBottom: '0.25rem' }}>Strengths:</strong>
+                        <ul style={{ paddingLeft: '1rem' }}>
+                          {ev.strengths?.map((s: string, i: number) => <li key={i}>{s}</li>)}
+                          {(!ev.strengths || ev.strengths.length === 0) && <li>No specific strengths recorded.</li>}
+                        </ul>
+                      </div>
+                      <div style={{ background: 'rgba(244,63,94,0.02)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(244,63,94,0.05)' }}>
+                        <strong style={{ color: '#fda4af', display: 'block', marginBottom: '0.25rem' }}>Gaps & Holes:</strong>
+                        <ul style={{ paddingLeft: '1rem' }}>
+                          {ev.gaps?.map((g: string, i: number) => <li key={i}>{g}</li>)}
+                          {(!ev.gaps || ev.gaps.length === 0) && <li>No conceptual gaps found.</li>}
+                        </ul>
+                      </div>
+                    </div>
+                    {ev.extracted_entities && (ev.extracted_entities.technologies?.length > 0 || ev.extracted_entities.frameworks?.length > 0) && (
+                      <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', cursor: 'default' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>Extracted Stack:</span>
+                        {ev.extracted_entities.technologies?.map((tech: string) => <span key={tech} className="badge badge-primary" style={{ fontSize: '0.65rem', textTransform: 'none' }}>{tech}</span>)}
+                        {ev.extracted_entities.frameworks?.map((fw: string) => <span key={fw} className="badge badge-success" style={{ fontSize: '0.65rem', textTransform: 'none' }}>{fw}</span>)}
+                      </div>
+                    )}
+                    <div style={{ marginTop: '0.75rem', borderTop: '1px dashed rgba(255,255,255,0.05)', paddingTop: '0.75rem', lineHeight: '1.5', cursor: 'default', color: 'var(--foreground)' }}>
+                      <strong>Feedback & Advice:</strong>
+                      <p style={{ marginTop: '0.25rem', whiteSpace: 'pre-line' }}>{ev.detailedFeedback}</p>
+                    </div>
+                  </details>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+          <button 
+            style={{ padding: '0.85rem 2.5rem' }} 
+            onClick={() => {
+              setActiveTab('dashboard');
+              setIsInterviewFinished(false);
+              setInterviewSummaryResult(null);
+              setEvaluationsList([]);
+              fetchTopicScores();
+            }}
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderProctoredActiveInterview = () => {
+    const currentQ = questionQueue[activeQuestionIndex] || '';
+    
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '2rem' }} className="grid-session">
+        
+        {/* Full-screen Warning Overlays */}
+        {proctoringWarningActive && proctoringWarningActive !== 'FORFEIT' && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(7, 8, 14, 0.9)',
+            backdropFilter: 'blur(16px)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10000,
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            <div className="card" style={{
+              maxWidth: '450px',
+              padding: '2.5rem',
+              border: '2px solid var(--danger)',
+              textAlign: 'center',
+              boxShadow: '0 20px 50px rgba(244, 63, 94, 0.15)'
+            }}>
+              <ShieldAlert size={48} color="var(--danger)" style={{ margin: '0 auto 1.5rem', animation: 'pulseGlow 2s infinite' }} />
+              <h3 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '0.75rem', color: 'var(--danger)' }}>
+                PROCTORING WARNING
+              </h3>
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-bright)', marginBottom: '1rem', fontWeight: 600 }}>
+                {proctoringWarningActive === 'TAB_SWITCH' 
+                  ? 'Focus Lost / Tab Switch Detected!' 
+                  : 'Face Stream Lost or Eye Gaze Deviation!'}
+              </p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: '1.4' }}>
+                You have switched windows or looked away from the camera feed. Technical interviews are strictly monitored.
+                This is warning <strong>{proctoringWarnings} of 2</strong>.
+                On the 3rd warning, this question will be marked incorrect automatically.
+              </p>
+              <button 
+                style={{ width: '100%', padding: '0.75rem', background: 'var(--danger)' }} 
+                onClick={() => setProctoringWarningActive(null)}
+              >
+                I Understand, Resume Interview
+              </button>
+            </div>
+          </div>
+        )}
+
+        {proctoringWarningActive === 'FORFEIT' && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(7, 8, 14, 0.95)',
+            backdropFilter: 'blur(20px)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10000,
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            <div className="card" style={{
+              maxWidth: '450px',
+              padding: '2.5rem',
+              border: '2px solid var(--danger)',
+              textAlign: 'center',
+              boxShadow: '0 20px 50px rgba(244, 63, 94, 0.3)'
+            }}>
+              <XCircle size={48} color="var(--danger)" style={{ margin: '0 auto 1.5rem' }} />
+              <h3 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '0.75rem', color: 'var(--danger)' }}>
+                STRIKE 3: QUESTION FORFEITED
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: '1.4' }}>
+                You have reached 3 proctoring violations (tab switches or camera issues). 
+                The response for this question has been marked as <strong>Incorrect (0 Score)</strong>.
+              </p>
+              <button 
+                style={{ width: '100%', padding: '0.75rem', background: 'var(--danger)', opacity: (isEvaluating || isPrefetching) ? 0.7 : 1 }} 
+                onClick={() => handleInterviewSubmitAnswer('FORFEIT')}
+                disabled={isEvaluating || isPrefetching}
+              >
+                {(isEvaluating || isPrefetching) ? (
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                    <RefreshCw size={16} className="spin-animation" style={{ animation: 'rotate 1.5s linear infinite' }} />
+                    Loading Next Question...
+                  </span>
+                ) : (
+                  'Move to Next Question'
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Left panel: webcam and statistics */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          {/* AI Proctoring & Security Card */}
+          <div className="card" style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            gap: '1rem',
+            border: '1px solid var(--card-border)',
+            transition: 'border-color 0.3s'
+          }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Anti-Cheat Monitor
+            </div>
+            
+            <div style={{
+              width: '100%',
+              padding: '1.25rem',
+              borderRadius: '12px',
+              background: 'rgba(255, 255, 255, 0.02)',
+              border: '1px solid rgba(255, 255, 255, 0.05)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              textAlign: 'center'
+            }}>
+              <ShieldAlert size={32} style={{ color: 'var(--primary)' }} />
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-bright)' }}>AI Session Guard</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tab-switch & focus monitoring active</div>
+            </div>
+
+            {/* Status indicator bar */}
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Proctor Status:</span>
+                <span style={{ 
+                  fontWeight: 700, 
+                  color: '#6ee7b7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <span style={{ 
+                    width: '6px', 
+                    height: '6px', 
+                    background: 'var(--success)', 
+                    borderRadius: '50%',
+                    display: 'inline-block',
+                    animation: 'pulseGlow 1.5s infinite'
+                  }}></span>
+                  Active Monitoring
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Infractions:</span>
+                <span style={{ 
+                  fontWeight: 700, 
+                  color: proctoringWarnings === 0 ? 'var(--success)' : proctoringWarnings === 1 ? 'var(--warning)' : 'var(--danger)'
+                }}>
+                  {proctoringWarnings} / 2 Warnings
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Session Progress info */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div>
+              <span className="badge badge-success" style={{ marginBottom: '0.5rem', background: 'rgba(139,92,246,0.1)', color: '#c084fc', borderColor: 'rgba(139,92,246,0.3)' }}>
+                {companyType} Mode
+              </span>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>
+                {targetRole}
+              </h3>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{selectedDomain}</div>
+            </div>
+
+            <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem' }}>
+                <span>Session Question:</span>
+                <span>{activeQuestionIndex + 1} of 7</span>
+              </div>
+              <div style={{ background: 'rgba(255, 255, 255, 0.05)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ 
+                  width: `${((activeQuestionIndex + 1) / 7) * 100}%`, 
+                  height: '100%', 
+                  background: 'linear-gradient(to right, var(--secondary), var(--primary))',
+                  transition: 'width 0.4s ease'
+                }}></div>
+              </div>
+            </div>
+
+            <button 
+              className="button-secondary" 
+              style={{ width: '100%', marginTop: '0.5rem', borderColor: 'rgba(244,63,94,0.2)', color: '#fda4af' }} 
+              onClick={handleExitInterviewEarly}
+            >
+              Quit Interview
+            </button>
+          </div>
+
+        </div>
+
+        {/* Right panel: Active Question work space */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          {/* Question card */}
+          <div className="card" style={{ position: 'relative', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                AI Technical Interviewer (Question {activeQuestionIndex + 1})
+              </span>
+              {isPrefetching && (
+                <span style={{ fontSize: '0.75rem', color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <RefreshCw size={12} className="spin-animation" style={{ animation: 'rotate 1.5s linear infinite' }} />
+                  Analyzing context & generating question...
+                </span>
+              )}
+            </div>
+            
+            <div style={{ 
+              fontSize: '1.15rem', 
+              fontWeight: 500, 
+              lineHeight: '1.6', 
+              color: 'var(--text-bright)',
+              minHeight: '60px'
+            }}>
+              {currentQ || (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}>
+                  <RefreshCw size={16} className="spin-animation" style={{ animation: 'rotate 1.5s linear infinite' }} />
+                  Interviewer is typing follow-up question...
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Answer Work space */}
+          {!isEvaluating && !isFinishingSession && (
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Lock size={12} /> Spoken Voice Response Only (Type-Locked)
+                </span>
+                
+                <button 
+                  className={isRecording ? 'button' : 'button-secondary'} 
+                  style={{ 
+                    padding: '0.4rem 0.85rem', 
+                    fontSize: '0.8rem',
+                    background: isRecording ? 'var(--danger)' : '',
+                    borderColor: isRecording ? 'var(--danger)' : ''
+                  }}
+                  onClick={handleToggleRecording}
+                  disabled={isPrefetching}
+                >
+                  {isRecording ? <MicOff size={14} /> : <Mic size={14} />} 
+                  {isRecording ? 'Stop Recording' : 'Start Spoken Answer'}
+                </button>
+              </div>
+
+              {/* Microphone Waveform Visualizer */}
+              {isRecording && (
+                <div style={{ 
+                  background: 'rgba(244, 63, 94, 0.03)', 
+                  border: '1px dashed rgba(244, 63, 94, 0.3)', 
+                  borderRadius: '12px', 
+                  padding: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.75rem'
+                }}>
+                  <div style={{ display: 'flex', gap: '4px', height: '30px', alignItems: 'center' }}>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(bar => (
+                      <div key={bar} style={{ 
+                        width: '3px', 
+                        height: '100%', 
+                        background: 'var(--danger)', 
+                        borderRadius: '2px',
+                        animation: `wave 0.8s ease-in-out infinite`,
+                        animationDelay: `${bar * 0.05}s`
+                      }}></div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 600 }}>
+                    Listening... Speak clearly. Tab focus and face visibility are monitored.
+                  </div>
+                  {interimTranscript && (
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-bright)', fontStyle: 'italic', textAlign: 'center', maxWidth: '85%' }}>
+                      &ldquo;{interimTranscript}&rdquo;
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <textarea
+                placeholder="Spoken words will appear here. Typing is locked for realistic voice testing..."
+                value={userAnswer}
+                rows={6}
+                style={{ 
+                  resize: 'vertical', 
+                  lineHeight: '1.5',
+                  background: 'rgba(255,255,255,0.01)',
+                  borderColor: 'rgba(255,255,255,0.04)',
+                  color: 'var(--text-bright)',
+                  cursor: 'not-allowed'
+                }}
+                readOnly={true}
+                disabled={true}
+              />
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button 
+                  className="button-secondary" 
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', borderColor: 'rgba(255,255,255,0.08)' }} 
+                  onClick={() => {
+                    setUserAnswer('');
+                    setInterimTranscript('');
+                  }}
+                  disabled={!userAnswer && !interimTranscript}
+                >
+                  <Trash2 size={14} /> Clear Box
+                </button>
+                
+                <button 
+                  style={{ padding: '0.85rem 2rem', background: 'linear-gradient(135deg, var(--secondary), var(--primary))' }} 
+                  onClick={() => handleInterviewSubmitAnswer()}
+                  disabled={!userAnswer.trim() || isPrefetching}
+                >
+                  Submit Spoken Response <Send size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Evaluating Answer / Finalizing session loaders */}
+          {isEvaluating && (
+            <div className="card" style={{ textAlign: 'center', padding: '4.5rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                border: '4px solid rgba(139, 92, 246, 0.1)',
+                borderTopColor: 'var(--secondary)',
+                borderRadius: '50%',
+                animation: 'rotate 1s linear infinite'
+              }}></div>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', fontWeight: 700 }}>
+                  Evaluating Response & Synthesizing Context
+                </h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', maxWidth: '420px', lineHeight: '1.5' }}>
+                  The AI is checking your response accuracy, performing tech entity extraction, and preparing your next follow-up challenge in the background...
+                </p>
+              </div>
+            </div>
+          )}
+
+          {isFinishingSession && (
+            <div className="card" style={{ textAlign: 'center', padding: '5rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                border: '4px solid rgba(16, 185, 129, 0.1)',
+                borderTopColor: 'var(--success)',
+                borderRadius: '50%',
+                animation: 'rotate 1s linear infinite'
+              }}></div>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', fontWeight: 700 }}>
+                  Compiling Technical Verdict Report
+                </h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', maxWidth: '420px', lineHeight: '1.5' }}>
+                  Reviewing transcript records, proctoring warnings, and scoring rubrics to output your overall hiring recommendation dashboard...
+                </p>
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+    );
+  };
+
   if (isCheckingAuth) {
     return (
       <div style={{
@@ -555,6 +1556,158 @@ export default function Home() {
 
   return (
     <div className="container" style={{ animation: 'fadeIn var(--transition-slow)' }}>
+      {/* AI INTERVIEW SETUP WIZARD MODAL */}
+      {showInterviewWizard && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(7, 8, 14, 0.85)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div className="card" style={{
+            width: '100%',
+            maxWidth: '520px',
+            padding: '2rem',
+            border: '1px solid rgba(139, 92, 246, 0.2)',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+            color: 'var(--foreground)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Sparkles size={20} color="var(--secondary)" />
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>AI Interview Setup</h3>
+              </div>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Step {wizardStep} of 3</span>
+            </div>
+
+            {/* STEP 1: Company Type */}
+            {wizardStep === 1 && (
+              <div>
+                <h4 style={{ fontSize: '1.05rem', marginBottom: '1rem', fontWeight: 600 }}>Choose Target Company Tier</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                  {[
+                    { id: 'MAANG', title: 'MAANG Tier', desc: 'Focuses on complex DSA, algorithms, and scale.', logo: '🌐' },
+                    { id: 'Unicorn', title: 'Tech Unicorns', desc: 'Focuses on systems architecture, APIs, and tooling.', logo: '🦄' },
+                    { id: 'Service-based Giant', title: 'Service Giants', desc: 'Focuses on frameworks, SQL, and syntax rules.', logo: '🏢' },
+                    { id: 'New Startup', title: 'Early Startups', desc: 'Focuses on agility, full-stack building, and speed.', logo: '🚀' }
+                  ].map(c => (
+                    <div 
+                      key={c.id}
+                      onClick={() => setCompanyType(c.id)}
+                      style={{
+                        padding: '1rem',
+                        borderRadius: '12px',
+                        background: companyType === c.id ? 'rgba(139, 92, 246, 0.08)' : 'rgba(255,255,255,0.02)',
+                        border: `1px solid ${companyType === c.id ? 'var(--secondary)' : 'rgba(255,255,255,0.06)'}`,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        textAlign: 'center'
+                      }}
+                      className="wizard-card-hover"
+                    >
+                      <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>{c.logo}</div>
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.25rem' }}>{c.title}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: '1.3' }}>{c.desc}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                  <button className="button-secondary" onClick={() => setShowInterviewWizard(false)}>Cancel</button>
+                  <button onClick={() => setWizardStep(2)}>Next Step <ArrowRight size={16} /></button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: Role Selection */}
+            {wizardStep === 2 && (
+              <div>
+                <h4 style={{ fontSize: '1.05rem', marginBottom: '1rem', fontWeight: 600 }}>Specify Target Role</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Select Predefined or Enter Custom</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. SDE II, Lead Architect, Business Analyst" 
+                      value={targetRole}
+                      onChange={e => setTargetRole(e.target.value)}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    {['SDE I', 'Backend Engineer', 'Frontend Engineer', 'Full Stack Developer', 'Cloud Architect', 'Business Analyst', 'Data Engineer'].map(r => (
+                      <span 
+                        key={r}
+                        onClick={() => setTargetRole(r)}
+                        style={{
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '8px',
+                          background: targetRole === r ? 'var(--secondary)' : 'rgba(255,255,255,0.04)',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          fontWeight: 500,
+                          border: '1px solid rgba(255,255,255,0.06)'
+                        }}
+                      >
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <button className="button-secondary" onClick={() => setWizardStep(1)}>Back</button>
+                  <button onClick={() => setWizardStep(3)}>Next Step <ArrowRight size={16} /></button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: Years of Experience */}
+            {wizardStep === 3 && (
+              <div>
+                <h4 style={{ fontSize: '1.05rem', marginBottom: '0.5rem', fontWeight: 600 }}>Years of Experience</h4>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+                  This adjusts the initial complexity bar of questions.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '2rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--secondary)' }}>{yearsOfExperience} Years</span>
+                    <span className="badge badge-primary">
+                      {yearsOfExperience >= 9 ? 'Lead/Principal' : yearsOfExperience >= 5 ? 'Senior' : yearsOfExperience >= 2 ? 'Mid-level' : 'Junior/Associate'}
+                    </span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="15" 
+                    value={yearsOfExperience}
+                    onChange={e => setYearsOfExperience(parseInt(e.target.value))}
+                    style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', outline: 'none', borderRadius: '3px' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <button className="button-secondary" onClick={() => setWizardStep(2)}>Back</button>
+                  <button 
+                    onClick={() => {
+                      setShowInterviewWizard(false);
+                      handleStartInterviewSession();
+                    }}
+                    style={{ background: 'linear-gradient(135deg, var(--secondary), var(--primary))' }}
+                  >
+                    Start Secure Interview <Play size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Missing configuration banner warning */}
       {!dbConfigured && (
         <div style={{
@@ -727,7 +1880,7 @@ export default function Home() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                         <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Practice Mode</label>
-                        <select value={sessionMode} onChange={e => setSessionMode(e.target.value as 'STUDY' | 'MOCK_INTERVIEW')}>
+                        <select value={sessionMode === 'AI_INTERVIEW' ? 'MOCK_INTERVIEW' : sessionMode} onChange={e => setSessionMode(e.target.value as 'STUDY' | 'MOCK_INTERVIEW')}>
                           <option value="STUDY">Study Mode (Conceptual)</option>
                           <option value="MOCK_INTERVIEW">Mock Interview (Strict)</option>
                         </select>
@@ -738,6 +1891,26 @@ export default function Home() {
                           Launch Coach <Play size={16} />
                         </button>
                       </div>
+                    </div>
+
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                        Looking for a realistic proctored coding/architecture evaluation?
+                      </div>
+                      <button 
+                        style={{ 
+                          width: '100%', 
+                          padding: '0.75rem', 
+                          background: 'linear-gradient(135deg, var(--secondary), var(--primary))',
+                          boxShadow: '0 0 15px rgba(139, 92, 246, 0.2)'
+                        }} 
+                        onClick={() => {
+                          setShowInterviewWizard(true);
+                          setWizardStep(1);
+                        }}
+                      >
+                        <Sparkles size={16} /> Launch AI Interview Mode
+                      </button>
                     </div>
 
                   </div>
@@ -802,7 +1975,14 @@ export default function Home() {
 
           {/* ACTIVE COACHING SESSION TAB */}
           {activeTab === 'session' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '2rem' }} className="grid-session">
+            sessionMode === 'AI_INTERVIEW' ? (
+              isInterviewFinished ? (
+                renderInterviewReport()
+              ) : (
+                renderProctoredActiveInterview()
+              )
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '2rem' }} className="grid-session">
               {/* Left Panel: Stats and metadata */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -1169,7 +2349,8 @@ export default function Home() {
                 )}
               </div>
             </div>
-          )}
+          )
+        )}
 
           {/* PROGRESS TAB */}
           {activeTab === 'progress' && (

@@ -18,7 +18,17 @@ const responseSchema = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { domain, topic, mode, currentLevel, targetRole, count } = await req.json();
+    const { 
+      domain, 
+      topic, 
+      mode, 
+      currentLevel, 
+      targetRole, 
+      count,
+      companyType,
+      yearsOfExperience,
+      extractedEntities
+    } = await req.json();
 
     if (!domain || !topic || !mode || currentLevel === undefined) {
       return NextResponse.json(
@@ -39,8 +49,35 @@ export async function POST(req: NextRequest) {
 
     const ai = new GoogleGenAI({ apiKey });
 
-    // Generate prompt instructing the model to generate EXACTLY `questionCount` questions
-    const prompt = `You are a professional examiner and interview coach for the track "${domain}" and topic/role "${topic}".
+    // Generate prompt instructing the model
+    let prompt = "";
+
+    if (mode === 'AI_INTERVIEW') {
+      prompt = `You are a professional technical interviewer representing a "${companyType || 'Standard Startup'}" company. You are conducting an AI-powered live interview for the role of "${targetRole || 'Software Engineer'}" (Candidate YoE: ${yearsOfExperience || 0} years).
+The target topic is "${topic}".
+The difficulty level is ${currentLevel} out of 10.
+
+Instructions:
+1. Generate EXACTLY ${questionCount} distinct question(s) that fits a "${companyType}" interview style:
+   - MAANG: Focus on core computer science foundations, highly optimized algorithms, scale, complex system design, and deep technical rigor.
+   - Tech Unicorn: Focus on system architecture, handling rapid growth, performance optimizations, API designs, and real-world tools.
+   - Service-based Giants (e.g. TCS): Focus on structured programming principles, database queries, core technology frameworks (e.g., Spring Boot, React), and syntax.
+   - New Startups: Focus on practical full-stack knowledge, agile tool sets, speedy implementation, and debugging.
+2. The question complexity must align with level ${currentLevel}/10.
+`;
+      if (extractedEntities && (extractedEntities.technologies?.length > 0 || extractedEntities.frameworks?.length > 0 || extractedEntities.architecturalChoices?.length > 0 || extractedEntities.projectDetails?.length > 0)) {
+        const entitiesStr = JSON.stringify(extractedEntities);
+        prompt += `
+3. DYNAMIC FOLLOW-UP REQUIREMENT: The candidate recently mentioned the following technologies/architectures/projects in their previous answers: ${entitiesStr}.
+   Instead of asking a generic question, generate a dynamic follow-up question. Mimic a real human interviewer who says: "Oh, you mentioned using X, can you explain how you handled Y in that design?". Probe deeper into the specific trade-offs, scaling limits, or failures related to those tools.
+4. Output the questions inside the JSON array matching the requested schema.`;
+      } else {
+        prompt += `
+3. This is the initial question. Ask a structured, open-ended question about ${topic} suitable for the role and experience level.
+4. Output the questions inside the JSON array matching the requested schema.`;
+      }
+    } else {
+      prompt = `You are a professional examiner and interview coach for the track "${domain}" and topic/role "${topic}".
 Generate exactly ${questionCount} distinct practice questions suited for a candidate at skill level ${currentLevel} out of 10.
 User's Target Role: ${targetRole || 'Software Engineer'}
 Mode: ${mode === 'STUDY' ? 'Study Mode (Concept Deep-Dive, high learning value, conceptual questions)' : 'Mock Interview Mode (Strict mock interview, realistic, testing precision and communication)'}
@@ -54,6 +91,7 @@ Instructions:
    - Level 9-10: Complex system design, distributed systems, high scalability, trade-offs under constraints.
 3. For software engineering/development domains, if level >= 4, feel free to ask questions that require writing or explaining code.
 4. Output the questions inside the JSON array matching the requested schema. Ensure they are distinct and do not repeat.`;
+    }
 
     // Call Gemini API for structured JSON output
     const response = await ai.models.generateContent({
