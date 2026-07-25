@@ -2986,7 +2986,7 @@ export default function Home() {
       }}>
         <span>Exam Buddy &copy; {new Date().getFullYear()}</span>
         <div style={{ display: 'flex', gap: '1rem' }}>
-          <span>Powered by Gemini 2.0 Flash</span>
+          <span>Powered by Gemini 3.5 Flash</span>
           <span>&bull;</span>
           <span>Web Speech API</span>
         </div>
