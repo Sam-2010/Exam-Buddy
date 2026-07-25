@@ -90,3 +90,11 @@ ALTER TABLE public.user_topic_scores DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sessions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.evaluations DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.study_resources DISABLE ROW LEVEL SECURITY;
+
+-- Grant access to anonymous and authenticated users for direct client-side query access
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT ALL ON TABLE public.profiles TO anon, authenticated;
+GRANT ALL ON TABLE public.user_topic_scores TO anon, authenticated;
+GRANT ALL ON TABLE public.sessions TO anon, authenticated;
+GRANT ALL ON TABLE public.evaluations TO anon, authenticated;
+GRANT ALL ON TABLE public.study_resources TO anon, authenticated;
