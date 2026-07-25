@@ -84,3 +84,9 @@ INSERT INTO public.study_resources (title, resource_url, topic, description) VAL
 ('GATE CS Mock Tests', 'https://gate.iitkgp.ac.in/', 'GATE CS/IT Prep', 'Official GATE resources and previous year papers.')
 ON CONFLICT (title, resource_url) DO NOTHING;
 
+-- Disable RLS to allow client-side access without standard Supabase Auth
+ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_topic_scores DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.evaluations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.study_resources DISABLE ROW LEVEL SECURITY;
