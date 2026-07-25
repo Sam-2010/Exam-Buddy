@@ -126,9 +126,9 @@ body {
 
 /* Standard Inputs & Controls */
 input, select, textarea {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--foreground);
+  background: rgba(17, 20, 34, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
   border-radius: 8px;
   padding: 0.75rem 1rem;
   font-family: inherit;
@@ -137,9 +137,29 @@ input, select, textarea {
   transition: border-color var(--transition-fast), background-color var(--transition-fast);
 }
 
+select {
+  cursor: pointer;
+  background-color: #0f1222;
+  color: #ffffff;
+}
+
+select option {
+  background-color: #0f1222;
+  color: #ffffff;
+  padding: 0.5rem 1rem;
+}
+
+select option:hover,
+select option:focus,
+select option:checked {
+  background-color: var(--primary);
+  color: #ffffff;
+}
+
 input:focus, select:focus, textarea:focus {
   border-color: var(--primary);
-  background: rgba(255, 255, 255, 0.08);
+  background: #15192d;
+  color: #ffffff;
 }
 
 button {
