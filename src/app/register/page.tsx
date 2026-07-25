@@ -270,13 +270,26 @@ export default function RegisterPage() {
                 style={{ width: '100%', paddingLeft: '2.75rem', appearance: 'none', cursor: 'pointer' }}
                 disabled={isLoading}
               >
-                <option value="Software Engineer">Software Engineer (General)</option>
-                <option value="Backend Engineer">Backend Developer (Spring Boot, Node)</option>
-                <option value="Frontend Engineer">Frontend Developer (React, Next.js)</option>
-                <option value="AI/ML Engineer">AI / Machine Learning Engineer</option>
-                <option value="GATE CS Candidate">GATE Computer Science Candidate</option>
-                <option value="Data Analyst">Data Analyst</option>
-                <option value="System Architect">System Architect / Tech Lead</option>
+                <optgroup label="─── Engineering Pathway ───">
+                  <option value="Engineering Admission">Engineering Admission (JEE / CET Aspirant)</option>
+                  <option value="Engineering Student">Engineering Student (Sem / Viva / Internals)</option>
+                </optgroup>
+                <optgroup label="─── Software Roles ───">
+                  <option value="Software Engineer">Software Engineer</option>
+                  <option value="Web Developer">Web Developer</option>
+                  <option value="Android Developer">Android Developer</option>
+                  <option value="Full Stack Developer">Full Stack Developer</option>
+                </optgroup>
+                <optgroup label="─── Data & AI Roles ───">
+                  <option value="Data Analyst">Data Analyst</option>
+                  <option value="Data Scientist">Data Scientist</option>
+                  <option value="AI/ML Engineer">AI/ML Engineer</option>
+                </optgroup>
+                <optgroup label="─── Infrastructure Roles ───">
+                  <option value="Cloud Engineer">Cloud Engineer</option>
+                  <option value="DevOps Engineer">DevOps Engineer</option>
+                  <option value="Cybersecurity Engineer">Cybersecurity Engineer</option>
+                </optgroup>
               </select>
             </div>
           </div>

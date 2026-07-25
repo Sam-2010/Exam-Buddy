@@ -137,6 +137,25 @@ input, select, textarea {
   transition: border-color var(--transition-fast), background-color var(--transition-fast);
 }
 
+select option, select optgroup {
+  background-color: #07080e;
+  color: #ffffff;
+  padding: 0.5rem 1rem;
+}
+
+select optgroup {
+  color: #818cf8;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+}
+
+select option {
+  color: #f3f4f6;
+  font-weight: 400;
+  padding: 0.35rem 0.75rem;
+}
+
 input:focus, select:focus, textarea:focus {
   border-color: var(--primary);
   background: rgba(255, 255, 255, 0.08);
