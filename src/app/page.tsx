@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { validateTopicName } from '@/lib/topic-moderation';
 import { 
   Brain, Mic, MicOff, Send, Sparkles, Trophy, TrendingUp, 
   Play, BookOpen, Award, ArrowRight, Compass, Activity, 
@@ -87,6 +88,7 @@ export default function Home() {
   const [customTopic, setCustomTopic] = useState('');
   const [isCustomTopic, setIsCustomTopic] = useState(false);
   const [sessionMode, setSessionMode] = useState<'STUDY' | 'MOCK_INTERVIEW' | 'AI_INTERVIEW'>('STUDY');
+  const [topicErrorMsg, setTopicErrorMsg] = useState<string | null>(null);
   
   // Active Session State
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -280,9 +282,18 @@ export default function Home() {
     
     const topicName = isCustomTopic ? customTopic.trim() : selectedTopic;
     if (!topicName) {
-      alert("Please specify a topic");
+      setTopicErrorMsg("Please specify a topic name.");
       return;
     }
+
+    // Validate custom topic safety & content moderation
+    const topicValidation = validateTopicName(topicName);
+    if (!topicValidation.isAllowed) {
+      setTopicErrorMsg(topicValidation.reason || "Inappropriate topic name detected.");
+      return;
+    }
+
+    setTopicErrorMsg(null);
 
     // Determine current level for this topic
     const existingScore = topicScores.find(item => item.topic.toLowerCase() === topicName.toLowerCase());
@@ -1862,18 +1873,42 @@ export default function Home() {
                       </div>
                       
                       {isCustomTopic ? (
-                        <input 
-                          type="text" 
-                          placeholder="e.g. System Design for Agricultural Tech" 
-                          value={customTopic}
-                          onChange={e => setCustomTopic(e.target.value)}
-                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                          <input 
+                            type="text" 
+                            placeholder="e.g. System Design for Agricultural Tech" 
+                            value={customTopic}
+                            onChange={e => {
+                              setCustomTopic(e.target.value);
+                              if (topicErrorMsg) setTopicErrorMsg(null);
+                            }}
+                            style={{ borderColor: topicErrorMsg ? 'var(--danger)' : '' }}
+                          />
+                        </div>
                       ) : (
                         <select value={selectedTopic} onChange={e => setSelectedTopic(e.target.value)}>
                           {DOMAINS_SCHEMA.find(d => d.name === selectedDomain)?.topics.map(t => (
                             <option key={t} value={t}>{t}</option>
                           ))}
                         </select>
+                      )}
+
+                      {topicErrorMsg && (
+                        <div style={{
+                          background: 'rgba(244, 63, 94, 0.08)',
+                          border: '1px solid rgba(244, 63, 94, 0.25)',
+                          padding: '0.6rem 0.85rem',
+                          borderRadius: '8px',
+                          color: '#fda4af',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          fontSize: '0.8rem',
+                          animation: 'fadeIn 0.2s ease-out'
+                        }}>
+                          <AlertTriangle size={15} color="var(--danger)" style={{ flexShrink: 0 }} />
+                          <span>{topicErrorMsg}</span>
+                        </div>
                       )}
                     </div>
 

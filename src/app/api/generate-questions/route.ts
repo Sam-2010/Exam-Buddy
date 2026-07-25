@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI, Type } from '@google/genai';
+import { validateTopicName } from '@/lib/topic-moderation';
 
 export const runtime = 'nodejs';
 
@@ -33,6 +34,15 @@ export async function POST(req: NextRequest) {
     if (!domain || !topic || !mode || currentLevel === undefined) {
       return NextResponse.json(
         { error: 'Missing required fields: domain, topic, mode, currentLevel' },
+        { status: 400 }
+      );
+    }
+
+    // Validate topic safety
+    const topicValidation = validateTopicName(topic);
+    if (!topicValidation.isAllowed) {
+      return NextResponse.json(
+        { error: topicValidation.reason || 'Inappropriate or unsafe topic name detected.' },
         { status: 400 }
       );
     }
