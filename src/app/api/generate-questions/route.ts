@@ -28,7 +28,8 @@ export async function POST(req: NextRequest) {
       count,
       companyType,
       yearsOfExperience,
-      extractedEntities
+      extractedEntities,
+      resumeData
     } = await req.json();
 
     if (!domain || !topic || !mode || currentLevel === undefined) {
@@ -66,7 +67,28 @@ export async function POST(req: NextRequest) {
       prompt = `You are a professional technical interviewer representing a "${companyType || 'Standard Startup'}" company. You are conducting an AI-powered live interview for the role of "${targetRole || 'Software Engineer'}" (Candidate YoE: ${yearsOfExperience || 0} years).
 The target topic is "${topic}".
 The difficulty level is ${currentLevel} out of 10.
+`;
+      if (resumeData && resumeData.projects && resumeData.projects.length > 0) {
+        const resumeSummary = `Candidate Resume Snapshot:
+- Name: ${resumeData.candidateName || 'Candidate'}
+- Profile: ${resumeData.summary || 'Technical candidate'}
+- Key Skills: ${resumeData.skills?.join(', ') || 'N/A'}
+- Projects: ${JSON.stringify(resumeData.projects)}
+- Experience: ${JSON.stringify(resumeData.experience || [])}`;
+        
+        prompt += `
+[RESUME & PORTFOLIO CONTEXT AVAILABLE]:
+${resumeSummary}
 
+Instructions:
+1. Generate EXACTLY ${questionCount} distinct question(s) tailored to this candidate.
+2. Ground your questions directly in the candidate's actual projects and experience listed above while focusing on the target topic "${topic}" and role "${targetRole}".
+   - Mimic a realistic interviewer: Reference a specific project by name (e.g. "I see on your resume that you built [Project Title] using [Tech Stack]...").
+   - Probe into their architectural decisions, tech stack choices, trade-offs, scaling challenges, database queries, state management, or concurrency handling in that project.
+3. Align the question complexity with level ${currentLevel}/10 for a "${companyType}" style interview.
+`;
+      } else {
+        prompt += `
 Instructions:
 1. Generate EXACTLY ${questionCount} distinct question(s) that fits a "${companyType}" interview style:
    - MAANG: Focus on core computer science foundations, highly optimized algorithms, scale, complex system design, and deep technical rigor.
@@ -75,6 +97,8 @@ Instructions:
    - New Startups: Focus on practical full-stack knowledge, agile tool sets, speedy implementation, and debugging.
 2. The question complexity must align with level ${currentLevel}/10.
 `;
+      }
+
       if (extractedEntities && (extractedEntities.technologies?.length > 0 || extractedEntities.frameworks?.length > 0 || extractedEntities.architecturalChoices?.length > 0 || extractedEntities.projectDetails?.length > 0)) {
         const entitiesStr = JSON.stringify(extractedEntities);
         prompt += `
@@ -83,7 +107,7 @@ Instructions:
 4. Output the questions inside the JSON array matching the requested schema.`;
       } else {
         prompt += `
-3. This is the initial question. Ask a structured, open-ended question about ${topic} suitable for the role and experience level.
+3. Ask a structured, open-ended technical question suitable for the role, experience level, and candidate's portfolio.
 4. Output the questions inside the JSON array matching the requested schema.`;
       }
     } else {

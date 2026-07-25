@@ -9,7 +9,7 @@ import {
   Play, BookOpen, Award, ArrowRight, Compass, Activity, 
   ChevronRight, LogOut, CheckCircle, AlertTriangle,
   ShieldAlert, Lock, Trash2, RefreshCw,
-  XCircle, UserCheck
+  XCircle, UserCheck, FileText, UploadCloud, FileCode, Check, Layers, Briefcase, FileSpreadsheet, Eye
 } from 'lucide-react';
 
 // Domain & Track Schema
@@ -60,6 +60,27 @@ interface EvaluationResult {
   strengths: string[];
   gaps: string[];
   detailedFeedback: string;
+}
+
+interface ResumeProject {
+  title: string;
+  techStack: string[];
+  description: string;
+  keyFeatures?: string[];
+}
+
+interface ResumeExperience {
+  company: string;
+  role: string;
+  keyContributions?: string[];
+}
+
+interface ResumeData {
+  candidateName: string;
+  skills: string[];
+  projects: ResumeProject[];
+  experience?: ResumeExperience[];
+  summary: string;
 }
 
 export default function Home() {
@@ -132,6 +153,106 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const [recognition, setRecognition] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [interimTranscript, setInterimTranscript] = useState('');
+
+  // Resume & Portfolio state
+  const [resumeData, setResumeData] = useState<ResumeData | null>(null);
+  const [isParsingResume, setIsParsingResume] = useState(false);
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const [pastedResumeText, setPastedResumeText] = useState('');
+  const [resumeInputMode, setResumeInputMode] = useState<'upload' | 'paste'>('upload');
+  const [resumeError, setResumeError] = useState<string | null>(null);
+  const [showResumeDrawer, setShowResumeDrawer] = useState(false);
+
+  // Resume persistence load
+  useEffect(() => {
+    const cachedResume = localStorage.getItem('exam_buddy_resume');
+    if (cachedResume) {
+      try {
+        setResumeData(JSON.parse(cachedResume));
+      } catch (e) {
+        console.error('Failed to parse cached resume data:', e);
+      }
+    }
+  }, []);
+
+  const parseResumePayload = async (content: string, fileType: string, fileName: string) => {
+    try {
+      setIsParsingResume(true);
+      setResumeError(null);
+      const res = await fetch('/api/parse-resume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileContent: content,
+          fileType: fileType,
+          fileName: fileName
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.resumeData) {
+        setResumeData(data.resumeData);
+        localStorage.setItem('exam_buddy_resume', JSON.stringify(data.resumeData));
+        setShowResumeModal(true);
+      } else {
+        setResumeError(data.error || 'Failed to parse resume content.');
+      }
+    } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      setResumeError(err.message || 'Error connecting to resume parsing service.');
+    } finally {
+      setIsParsingResume(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fileName = file.name;
+    const fileExt = fileName.split('.').pop()?.toLowerCase() || '';
+
+    const allowedExts = ['pdf', 'docx', 'doc', 'pptx', 'ppt', 'md', 'txt'];
+    if (!allowedExts.includes(fileExt)) {
+      setResumeError(`Unsupported file format .${fileExt}. Supported formats: PDF, DOCX, DOC, PPTX, PPT, MD, TXT.`);
+      return;
+    }
+
+    try {
+      const reader = new FileReader();
+
+      if (fileExt === 'txt' || fileExt === 'md') {
+        reader.readAsText(file);
+        reader.onload = async () => {
+          const textContent = reader.result as string;
+          await parseResumePayload(textContent, fileExt, fileName);
+        };
+      } else {
+        // PDF, DOCX, PPTX - read as DataURL / Base64
+        reader.readAsDataURL(file);
+        reader.onload = async () => {
+          const dataUrl = reader.result as string;
+          const base64 = dataUrl.split(',')[1];
+          await parseResumePayload(base64, fileExt, fileName);
+        };
+      }
+    } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      setResumeError(err.message || 'Failed to read uploaded file.');
+      setIsParsingResume(false);
+    }
+  };
+
+  const handlePasteResumeSubmit = async () => {
+    if (!pastedResumeText.trim()) {
+      setResumeError('Please paste your resume text first.');
+      return;
+    }
+    await parseResumePayload(pastedResumeText, 'txt', 'Pasted Resume');
+  };
+
+  const handleClearResume = () => {
+    setResumeData(null);
+    localStorage.removeItem('exam_buddy_resume');
+  };
 
   // Initialize simulated auth profile and browser check
   useEffect(() => {
@@ -693,6 +814,7 @@ export default function Home() {
           targetRole: targetRole,
           companyType: companyType,
           yearsOfExperience: yearsOfExperience,
+          resumeData: resumeData,
           count: 1
         })
       });
@@ -845,6 +967,7 @@ export default function Home() {
                 companyType: companyType,
                 yearsOfExperience: yearsOfExperience,
                 extractedEntities: combinedEntities,
+                resumeData: resumeData,
                 count: 1
               })
             });
@@ -1323,6 +1446,42 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Candidate Portfolio Grounding Card */}
+          {resumeData && (
+            <div className="card" style={{ padding: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#a5b4fc', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <FileText size={14} /> Resume Grounded
+                </span>
+                <span className="badge badge-success" style={{ fontSize: '0.6rem' }}>Active</span>
+              </div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-bright)', marginBottom: '0.25rem' }}>
+                {resumeData.candidateName}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: '1.35', marginBottom: '0.5rem' }}>
+                Questions reference your {resumeData.projects?.length || 0} parsed project(s) & experience.
+              </div>
+              <button 
+                className="button-secondary" 
+                style={{ width: '100%', padding: '0.35rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+                onClick={() => setShowResumeDrawer(!showResumeDrawer)}
+              >
+                <Eye size={12} /> {showResumeDrawer ? 'Hide Projects' : 'View Stored Projects'}
+              </button>
+
+              {showResumeDrawer && (
+                <div style={{ marginTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
+                  {resumeData.projects?.map((p, i) => (
+                    <div key={i} style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '0.4rem 0.6rem', borderRadius: '6px', fontSize: '0.72rem' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--secondary)' }}>{p.title}</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }}>{p.techStack?.join(', ')}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Session Progress info */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
@@ -1555,6 +1714,156 @@ export default function Home() {
     );
   };
 
+  const renderResumeModal = () => {
+    if (!showResumeModal || !resumeData) return null;
+
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(7, 8, 14, 0.85)',
+        backdropFilter: 'blur(12px)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 10000,
+        padding: '1.5rem',
+        animation: 'fadeIn 0.2s ease-out'
+      }}>
+        <div className="card" style={{
+          maxWidth: '750px',
+          width: '100%',
+          maxHeight: '85vh',
+          overflowY: 'auto',
+          padding: '2rem',
+          border: '1px solid rgba(139, 92, 246, 0.3)',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1.5rem'
+        }}>
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ background: 'rgba(139, 92, 246, 0.15)', padding: '0.6rem', borderRadius: '10px' }}>
+                <FileText size={24} color="var(--primary)" />
+              </div>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                  {resumeData.candidateName || 'Parsed Resume Profile'}
+                </h2>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Grounded Resume & Portfolio Context
+                </div>
+              </div>
+            </div>
+            <button className="button-secondary" style={{ padding: '0.4rem 0.6rem' }} onClick={() => setShowResumeModal(false)}>
+              <XCircle size={18} />
+            </button>
+          </div>
+
+          {/* Technical Summary */}
+          {resumeData.summary && (
+            <div style={{ background: 'rgba(139, 92, 246, 0.06)', border: '1px solid rgba(139, 92, 246, 0.2)', padding: '1rem', borderRadius: '10px', fontSize: '0.85rem', lineHeight: '1.5' }}>
+              <span style={{ fontWeight: 600, color: '#c084fc', display: 'block', marginBottom: '0.25rem' }}>
+                ⚡ Technical Profile Overview:
+              </span>
+              {resumeData.summary}
+            </div>
+          )}
+
+          {/* Technical Skills */}
+          {resumeData.skills && resumeData.skills.length > 0 && (
+            <div>
+              <h4 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Layers size={16} color="var(--primary)" /> Extracted Technical Skills ({resumeData.skills.length})
+              </h4>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                {resumeData.skills.map((skill, idx) => (
+                  <span key={idx} className="badge badge-primary" style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem' }}>
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Extracted Projects */}
+          {resumeData.projects && resumeData.projects.length > 0 && (
+            <div>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Briefcase size={16} color="var(--secondary)" /> Parsed Projects & Portfolio ({resumeData.projects.length})
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {resumeData.projects.map((proj, idx) => (
+                  <div key={idx} style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
+                      <h5 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-bright)' }}>{proj.title}</h5>
+                    </div>
+                    
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.6rem', lineHeight: '1.4' }}>
+                      {proj.description}
+                    </p>
+
+                    {proj.techStack && proj.techStack.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
+                        {proj.techStack.map((tech, tIdx) => (
+                          <span key={tIdx} style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '4px', padding: '0.15rem 0.45rem', fontSize: '0.7rem', color: '#a5b4fc' }}>
+                            {tech}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {proj.keyFeatures && proj.keyFeatures.length > 0 && (
+                      <ul style={{ margin: '0.4rem 0 0 1.2rem', padding: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        {proj.keyFeatures.map((feat, fIdx) => (
+                          <li key={fIdx} style={{ marginBottom: '0.2rem' }}>{feat}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Work Experience */}
+          {resumeData.experience && resumeData.experience.length > 0 && (
+            <div>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Award size={16} color="var(--success)" /> Experience History ({resumeData.experience.length})
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {resumeData.experience.map((exp, idx) => (
+                  <div key={idx} style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)', borderRadius: '8px', padding: '0.85rem' }}>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-bright)' }}>
+                      {exp.role} &mdash; <span style={{ color: 'var(--primary)' }}>{exp.company}</span>
+                    </div>
+                    {exp.keyContributions && exp.keyContributions.length > 0 && (
+                      <ul style={{ margin: '0.4rem 0 0 1.2rem', padding: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        {exp.keyContributions.map((contrib, cIdx) => (
+                          <li key={cIdx}>{contrib}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Footer Action */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '1rem' }}>
+            <button className="button" style={{ padding: '0.6rem 1.25rem' }} onClick={() => setShowResumeModal(false)}>
+              <Check size={16} /> Confirm & Save Resume Context
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (isCheckingAuth) {
     return (
       <div style={{
@@ -1582,6 +1891,7 @@ export default function Home() {
 
   return (
     <div className="container" style={{ animation: 'fadeIn var(--transition-slow)' }}>
+      {renderResumeModal()}
       {/* AI INTERVIEW SETUP WIZARD MODAL */}
       {showInterviewWizard && (
         <div style={{
@@ -1992,6 +2302,144 @@ export default function Home() {
                       </button>
                     </div>
 
+                  </div>
+                </div>
+
+                {/* Candidate Resume & Portfolio Card */}
+                <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <FileText size={18} color="var(--primary)" /> Candidate Resume & Portfolio
+                      </span>
+                      {resumeData ? (
+                        <span className="badge badge-success" style={{ fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <Check size={12} /> Active Resume
+                        </span>
+                      ) : (
+                        <span className="badge" style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.06)' }}>
+                          Optional
+                        </span>
+                      )}
+                    </h3>
+
+                    {resumeData ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                        <div style={{ background: 'rgba(139, 92, 246, 0.05)', border: '1px solid rgba(139, 92, 246, 0.2)', padding: '0.85rem', borderRadius: '10px' }}>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-bright)' }}>
+                            {resumeData.candidateName || 'Candidate Profile'}
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem', lineHeight: '1.4' }}>
+                            {resumeData.summary || 'Resume projects loaded.'}
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.8rem' }}>
+                          <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Projects Parsed</span>
+                            <div style={{ fontWeight: 700, color: 'var(--secondary)' }}>{resumeData.projects?.length || 0} Projects</div>
+                          </div>
+                          <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Key Skills</span>
+                            <div style={{ fontWeight: 700, color: 'var(--primary)' }}>{resumeData.skills?.length || 0} Extracted</div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.35rem' }}>
+                          <button className="button-secondary" style={{ flex: 1, padding: '0.5rem', fontSize: '0.78rem' }} onClick={() => setShowResumeModal(true)}>
+                            <Eye size={14} /> Preview Portfolio
+                          </button>
+                          <button className="button-secondary" style={{ padding: '0.5rem', fontSize: '0.78rem', color: '#fda4af' }} onClick={handleClearResume} title="Clear Resume">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                          Upload your resume or portfolio to enable hyper-realistic questions based on your actual projects, architecture choices, and tools.
+                        </p>
+
+                        {/* Format Pills */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                          {['PDF', 'Word (.docx)', 'PPTX', 'Markdown', 'TXT'].map(fmt => (
+                            <span key={fmt} style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '4px', padding: '0.15rem 0.45rem', fontSize: '0.68rem', color: '#a5b4fc' }}>
+                              {fmt}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Mode selector tab */}
+                        <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(255,255,255,0.03)', padding: '0.2rem', borderRadius: '8px' }}>
+                          <button 
+                            className={resumeInputMode === 'upload' ? '' : 'button-secondary'} 
+                            style={{ flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.75rem' }}
+                            onClick={() => setResumeInputMode('upload')}
+                          >
+                            <UploadCloud size={14} /> Upload File
+                          </button>
+                          <button 
+                            className={resumeInputMode === 'paste' ? '' : 'button-secondary'} 
+                            style={{ flex: 1, padding: '0.35rem 0.5rem', fontSize: '0.75rem' }}
+                            onClick={() => setResumeInputMode('paste')}
+                          >
+                            <FileCode size={14} /> Paste Text
+                          </button>
+                        </div>
+
+                        {resumeInputMode === 'upload' ? (
+                          <div style={{ position: 'relative', border: '2px dashed rgba(139, 92, 246, 0.3)', borderRadius: '10px', padding: '1.25rem 1rem', textAlign: 'center', background: 'rgba(139, 92, 246, 0.02)' }}>
+                            <input 
+                              type="file" 
+                              accept=".pdf,.docx,.doc,.pptx,.ppt,.md,.txt" 
+                              onChange={handleFileUpload}
+                              disabled={isParsingResume}
+                              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                            />
+                            {isParsingResume ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                                <RefreshCw size={24} color="var(--primary)" style={{ animation: 'rotate 1s linear infinite' }} />
+                                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)' }}>Gemini is analyzing resume...</span>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem' }}>
+                                <UploadCloud size={24} color="var(--secondary)" />
+                                <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Drop PDF, Word, PPTX, MD or TXT file</span>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Click or drag file here</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <textarea 
+                              placeholder="Paste raw text of your resume or portfolio here..." 
+                              rows={4}
+                              value={pastedResumeText}
+                              onChange={e => setPastedResumeText(e.target.value)}
+                              disabled={isParsingResume}
+                              style={{ width: '100%', fontSize: '0.8rem', resize: 'vertical' }}
+                            />
+                            <button 
+                              style={{ padding: '0.5rem', fontSize: '0.8rem' }}
+                              onClick={handlePasteResumeSubmit}
+                              disabled={isParsingResume}
+                            >
+                              {isParsingResume ? <RefreshCw size={14} style={{ animation: 'rotate 1s linear infinite' }} /> : <Check size={14} />} Parse Resume Text
+                            </button>
+                          </div>
+                        )}
+
+                        {resumeError && (
+                          <div style={{ fontSize: '0.75rem', color: '#fda4af', background: 'rgba(244, 63, 94, 0.1)', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(244, 63, 94, 0.2)' }}>
+                            {resumeError}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.75rem', marginTop: '1rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    💡 AI Interviewer will reference your uploaded projects automatically when generating questions.
                   </div>
                 </div>
               </div>
