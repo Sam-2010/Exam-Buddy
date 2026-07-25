@@ -109,6 +109,7 @@ export default function Home() {
   const [companyType, setCompanyType] = useState('MAANG');
   const [yearsOfExperience, setYearsOfExperience] = useState(2);
   const [targetRole, setTargetRole] = useState('Software Engineer');
+  const [allowTypingInInterview, setAllowTypingInInterview] = useState(false);
   const [proctoringWarnings, setProctoringWarnings] = useState(0);
   const [proctoringLog, setProctoringLog] = useState<{ timestamp: string; type: string; details?: string }[]>([]);
   const [extractedEntitiesAccumulated, setExtractedEntitiesAccumulated] = useState<{
@@ -1397,9 +1398,19 @@ export default function Home() {
           {!isEvaluating && !isFinishingSession && (
             <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <Lock size={12} /> Spoken Voice Response Only (Type-Locked)
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    {allowTypingInInterview ? <CheckCircle size={12} color="var(--success)" /> : <Lock size={12} />} 
+                    {allowTypingInInterview ? 'Text & Voice Enabled' : 'Voice Only Mode'}
+                  </span>
+                  <button 
+                    className="button-secondary"
+                    onClick={() => setAllowTypingInInterview(!allowTypingInInterview)}
+                    style={{ padding: '0.2rem 0.65rem', fontSize: '0.7rem', borderColor: 'rgba(255,255,255,0.1)' }}
+                  >
+                    {allowTypingInInterview ? 'Lock to Voice Only' : 'Enable Typing'}
+                  </button>
+                </div>
                 
                 <button 
                   className={isRecording ? 'button' : 'button-secondary'} 
@@ -1453,19 +1464,23 @@ export default function Home() {
               )}
 
               <textarea
-                placeholder="Spoken words will appear here. Typing is locked for realistic voice testing..."
+                placeholder={allowTypingInInterview ? "Type your technical response here, or click 'Start Spoken Answer' to dictate..." : "Spoken words will appear here. Voice-only mode active (click 'Enable Typing' above to type manually)..."}
                 value={userAnswer}
+                onChange={e => {
+                  if (allowTypingInInterview) {
+                    setUserAnswer(e.target.value);
+                  }
+                }}
                 rows={6}
                 style={{ 
                   resize: 'vertical', 
                   lineHeight: '1.5',
-                  background: 'rgba(255,255,255,0.01)',
-                  borderColor: 'rgba(255,255,255,0.04)',
+                  background: allowTypingInInterview ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.01)',
+                  borderColor: allowTypingInInterview ? 'rgba(99, 102, 241, 0.3)' : 'rgba(255,255,255,0.04)',
                   color: 'var(--text-bright)',
-                  cursor: 'not-allowed'
+                  cursor: allowTypingInInterview ? 'text' : 'not-allowed'
                 }}
-                readOnly={true}
-                disabled={true}
+                readOnly={!allowTypingInInterview}
               />
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1486,7 +1501,7 @@ export default function Home() {
                   onClick={() => handleInterviewSubmitAnswer()}
                   disabled={!userAnswer.trim() || isPrefetching}
                 >
-                  Submit Spoken Response <Send size={16} />
+                  Submit Technical Response <Send size={16} />
                 </button>
               </div>
             </div>
@@ -1700,6 +1715,35 @@ export default function Home() {
                     onChange={e => setYearsOfExperience(parseInt(e.target.value))}
                     style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', outline: 'none', borderRadius: '3px' }}
                   />
+
+                  {/* Typing Mode Selection */}
+                  <div style={{
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    padding: '0.85rem 1rem',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '1rem',
+                    marginTop: '0.5rem'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-bright)' }}>Enable Text Typing in Interview</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Allow keyboard typing in addition to spoken voice answers</div>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '0.5rem' }}>
+                      <input 
+                        type="checkbox"
+                        checked={allowTypingInInterview}
+                        onChange={e => setAllowTypingInInterview(e.target.checked)}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                      />
+                      <span style={{ fontSize: '0.8rem', fontWeight: 600, color: allowTypingInInterview ? 'var(--primary)' : 'var(--text-muted)' }}>
+                        {allowTypingInInterview ? 'Enabled' : 'Voice Only'}
+                      </span>
+                    </label>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <button className="button-secondary" onClick={() => setWizardStep(2)}>Back</button>
