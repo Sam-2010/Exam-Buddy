@@ -139,14 +139,27 @@ input, select, textarea {
 
 select {
   cursor: pointer;
-  background-color: #0f1222;
+  background-color: #07080e;
   color: #ffffff;
 }
 
-select option {
-  background-color: #0f1222;
+select option, select optgroup {
+  background-color: #07080e;
   color: #ffffff;
   padding: 0.5rem 1rem;
+}
+
+select optgroup {
+  color: #818cf8;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+}
+
+select option {
+  color: #f3f4f6;
+  font-weight: 400;
+  padding: 0.35rem 0.75rem;
 }
 
 select option:hover,
