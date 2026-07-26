@@ -98,3 +98,24 @@ GRANT ALL ON TABLE public.user_topic_scores TO anon, authenticated;
 GRANT ALL ON TABLE public.sessions TO anon, authenticated;
 GRANT ALL ON TABLE public.evaluations TO anon, authenticated;
 GRANT ALL ON TABLE public.study_resources TO anon, authenticated;
+
+-- =========================================================================
+-- MIGRATION: SUPPORT FOR AI INTERVIEW MODE
+-- Run these statements in your Supabase SQL editor if database is already setup.
+-- =========================================================================
+
+ALTER TABLE public.sessions DROP CONSTRAINT IF EXISTS sessions_mode_check;
+ALTER TABLE public.sessions ADD CONSTRAINT sessions_mode_check CHECK (mode IN ('STUDY', 'MOCK_INTERVIEW', 'AI_INTERVIEW'));
+
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS company_type TEXT;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS years_of_experience INT;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS hiring_verdict TEXT;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS executive_summary TEXT;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS overall_strengths JSONB;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS overall_gaps JSONB;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS proctoring_warnings_count INT DEFAULT 0;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS proctoring_log JSONB DEFAULT '[]'::jsonb;
+
+ALTER TABLE public.evaluations ADD COLUMN IF NOT EXISTS extracted_entities JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.evaluations ADD COLUMN IF NOT EXISTS proctoring_flags JSONB DEFAULT '[]'::jsonb;
+

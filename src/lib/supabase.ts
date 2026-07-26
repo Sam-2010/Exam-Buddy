@@ -38,12 +38,20 @@ export type DatabaseSession = {
   user_id: string;
   domain: string;
   topic_or_role: string;
-  mode: 'STUDY' | 'MOCK_INTERVIEW';
+  mode: 'STUDY' | 'MOCK_INTERVIEW' | 'AI_INTERVIEW';
   total_questions: number;
   overall_session_score: number;
   status: 'IN_PROGRESS' | 'COMPLETED';
   created_at?: string;
   completed_at?: string | null;
+  company_type?: string;
+  years_of_experience?: number;
+  hiring_verdict?: string;
+  executive_summary?: string;
+  overall_strengths?: string[];
+  overall_gaps?: string[];
+  proctoring_warnings_count?: number;
+  proctoring_log?: { timestamp: string; type: string; details?: string }[];
 };
 
 export type DatabaseEvaluation = {
@@ -60,6 +68,13 @@ export type DatabaseEvaluation = {
   gaps: string[] | null;
   difficulty_level: number;
   created_at?: string;
+  extracted_entities?: {
+    technologies?: string[];
+    frameworks?: string[];
+    architecturalChoices?: string[];
+    projectDetails?: string[];
+  } | null;
+  proctoring_flags?: { type: string; details?: string }[] | null;
 };
 
 export type DatabaseStudyResource = {
